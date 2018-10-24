@@ -98,6 +98,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  /* my code */
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -197,10 +198,12 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
-
+  /* my code */
   /* Add to run queue. */
+  
   thread_unblock (t);
-
+  if(t->priority > thread_get_priority())  // if new thread's priority is higher than cur thread, yield CPU
+    thread_yield();
   return tid;
 }
 
@@ -237,7 +240,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  //list_push_back (&ready_list, &t->elem);
+  list_insert_ordered(&ready_list, &t->elem,(list_less_func *)&thread_cmp_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -308,7 +312,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    //list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, (list_less_func *)&thread_cmp_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -335,7 +340,14 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  //printf("cur_priority:%d\n",thread_get_priority());
+  //printf("new_priority:%d\n",new_priority);
+  enum intr_level old_level = intr_disable();
+  thread_current()->base_priority = thread_get_priority();
   thread_current ()->priority = new_priority;
+  
+  thread_yield();  // yield CPU when current thread is not highest priority.
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
@@ -464,10 +476,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   /* my code */
-  t->exit_code = 0;
+  t->sleep_ticks = 0; 
+  t->prev_priority = priority;
+  t->base_priority = priority;
+  t->lock_waiting = NULL;  
 
   old_level = intr_disable ();
-  list_push_back (&all_list, &t->allelem);
+  //list_push_back (&all_list, &t->allelem);
+  list_insert_ordered(&all_list, &t->allelem, (list_less_func *)&thread_cmp_priority, NULL);
   intr_set_level (old_level);
 }
 
@@ -584,3 +600,52 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+/* my code */
+
+/* Each thread has val "sleep_ticks", this function is to check 
+if thread is blocked. If it's blocked and ticks==0, unblock it. */
+void thread_blocked_check(struct thread *t, void *aux UNUSED){
+  if(t->status==THREAD_BLOCKED && t->sleep_ticks>0){
+    if(t->sleep_ticks>0){
+      t->sleep_ticks--;
+    }
+    if(t->sleep_ticks==0){
+      thread_unblock(t);
+    }
+  }
+}
+
+
+bool thread_cmp_priority(const struct list_elem *l,const struct list_elem *r, void *aux UNUSED){
+  return list_entry(l,struct thread, elem)->priority > list_entry(r,struct thread, elem)->priority;
+}
+
+void thread_donate_priority(struct thread *t,void *aux UNUSED)
+{
+  //printf("lock_holder priority:%d\n",t->priority);
+  //printf("cur thread priority:%d\n",thread_get_priority());
+  ASSERT(is_thread(t));
+  ASSERT(t!=thread_current());
+  enum intr_level old_level = intr_disable();
+  if(t->priority < thread_get_priority()){
+    t->prev_priority = t->priority;
+    printf("prev: %d\n",t->prev_priority);
+    t->priority = thread_get_priority();
+    printf("pri: %d\n",t->priority);
+    list_sort(&ready_list,&thread_cmp_priority,NULL);
+  }
+  intr_set_level(old_level);
+}
+void thread_reset_priority(struct thread *t, void *aux UNUSED){
+  ASSERT(t==thread_current());
+  if(t->priority!=t->base_priority){
+    //printf("reset_thread_name:%s\n",t->name); 
+    //printf("reset_thread_pri:%d\n",t->priority); 
+    //printf("reset_thread_prev_pri:%d\n",t->prev_priority); 
+    set_inside_func(t,NULL);
+    list_sort(&ready_list,&thread_cmp_priority,NULL);
+  }
+}
+
+

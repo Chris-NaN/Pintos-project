@@ -30,6 +30,9 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  /* my code */
+  char *process_name;
+  char *save_ptr;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -37,9 +40,12 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  
+  /* my code */
+  process_name = strtok_r((char *)file_name," ",&save_ptr); // split name
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (process_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -59,7 +65,12 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  /* my code */
+  char *process_name;
+  char *save_ptr;
+  process_name = strtok_r(file_name," ", &save_ptr);
+  /**/
+  success = load (process_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -110,6 +121,8 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
+      printf("%s: exit(%d)\n",cur->name,cur->exit_code);
+      /*my code above*/
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);

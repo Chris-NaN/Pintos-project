@@ -92,7 +92,11 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
+    /* my code */
+    int prev_priority;                  /* previous priority before donation */   
+    int base_priority;                  /*  */
+    int64_t sleep_ticks;                    /* number of ticks thread need to sleep */
+    struct lock *lock_waiting;         // Consider nest problem, record lock the thread waiting                                          for
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -100,9 +104,6 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-    
-    /* my code */
-    int exit_code;                      /* exit code to printed */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -141,4 +142,9 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/* my extra code */
+void thread_blocked_check( struct thread *t, void *aux UNUSED);
+bool thread_cmp_priority(const struct list_elem *l,const struct list_elem *r, void *aux UNUSED);
+void thread_donate_priority(struct thread *t,void *aux UNUSED);
+void thread_reset_priority(struct thread *t, void *aux UNUSED);
 #endif /* threads/thread.h */
