@@ -73,9 +73,49 @@ start_process (void *file_name_)
   success = load (process_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  if (!success){ 
+    palloc_free_page (file_name);  // free if load failed
     thread_exit ();
+  }
+  /* my code */
+  /* setup stack if load success*/
+  char *esp = (char *)if_.esp;
+  char *args[128];  // limit number of arguments
+  int n = 0;
+  // push arguments to stack, no matter order(will be referenced by pointer later)
+  for(char *arg=strtok_r(NULL," ",&save_ptr);arg!=NULL;arg = strtok_r(NULL," ",&save_ptr)){
+    esp -= strlen(arg)+1;  // token+'\0'
+    strlcpy(esp,arg,strlen(arg)+1); 
+    args[n++] = esp;
+  }
+  // 4 word align
+  while((int)esp%4!=0){
+    esp--;
+    *esp = 0;  // data = 0
+  }
+  // store the addr of each auguments
+  int *int_p = (int *) esp;
+  int_p-=1;   // argv[4] = 0
+  *int_p = 0;
+  // store addr of args
+  for(int i=n-1;i>=0;i--){
+    int_p-=1;
+    *int_p = (int *)args[i];
+  }
+  // argv: addr of header of args; type: char**
+  int_p-=1;
+  *int_p = int_p+1;
+  // argc: number of arguments; type: int
+  int_p-=1;
+  *int_p = n;
+  // return addr: 0; type: void(*) ()
+  int_p -= 1;
+  *int_p = 0;
+  // stack pointer would be initialized to top of the stack
+  if_.esp = (void *)int_p;
+  palloc_free_page (file_name);  // free if load successed and stack has been setted up
+
+  
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
