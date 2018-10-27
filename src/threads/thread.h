@@ -103,6 +103,11 @@ struct thread
     
     /* my code */
     int exit_code;                      /* exit code to printed */
+    // File Syscall
+    struct list file_list;              /* Each thread has its file list */
+    int fd;                             /* file discriptor, to describe file num? */
+
+
   };
 
 /* If false (default), use round-robin scheduler.

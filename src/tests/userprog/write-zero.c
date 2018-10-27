@@ -2,6 +2,7 @@
    anything. */
 
 #include <syscall.h>
+#include <stdio.h>
 #include "tests/lib.h"
 #include "tests/main.h"
 
@@ -11,6 +12,7 @@ test_main (void)
   int handle, byte_cnt;
   char buf;
 
+  write (1, &buf, 0);
   CHECK ((handle = open ("sample.txt")) > 1, "open \"sample.txt\"");
 
   buf = 123;
