@@ -9,10 +9,13 @@
 #include "threads/malloc.h"
 #include "devices/input.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
 static struct file* getFile(struct thread* t, int fd);
 void CloseFile(struct thread *t, int fd, bool All);
+void is_phy_vaddr(const void *addr);
+void is_vbuffer(const void *buffer, unsigned size);
 
 struct file_node
 {
@@ -59,6 +62,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_EXEC:
     {
       const char* cmd_line = (char *)*((int*)f->esp+1);
+      is_phy_vaddr(cmd_line);
       Sys_exec(cmd_line);
       break;
     }
@@ -71,6 +75,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_CREATE:
     {
       const char*file =(char *) *((int*)f->esp+1);
+      is_phy_vaddr(file);
       unsigned initial_size =  *((int*)f->esp+2);
       f->eax = Sys_create(file,initial_size);
       break;
@@ -78,12 +83,14 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_REMOVE:
     {
       const char* file = (char *) *((int*)f->esp+1);
+      is_phy_vaddr(file);
       f->eax = Sys_remove(file);
       break;
     }
     case SYS_OPEN:
     {
       const char* file = (char *)*((int*)f->esp+1);
+      is_phy_vaddr(file);
       f->eax = Sys_open(file);
       break;
     }
@@ -98,6 +105,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       int fd = *((int*)f->esp+1);
       void* buffer = (void *)*((int*)f->esp+2);
       unsigned size= *((int*)f->esp+3);
+      is_vbuffer(buffer,size);
       f->eax = Sys_read(fd, buffer, size);
       break;
     }
@@ -106,6 +114,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       int fd = *((int*)f->esp+1);
       const void* buffer = (void *)*((int *)f->esp+2);
       unsigned size = *((int *)f->esp+3);
+      is_vbuffer(buffer,size);
       f->eax = Sys_write(fd,buffer,size);
       break;
     }
@@ -182,7 +191,8 @@ bool
 Sys_create(const char* file, unsigned initial_size)
 {
   /* check its validity ? */
-
+  if(!file)
+    return false;
   return filesys_create(file,initial_size);
 }
 
@@ -193,10 +203,6 @@ Sys_remove(const char* file)
 
   return filesys_remove(file);
 }
-
-
-
-
 
 int
 Sys_open(const char*file)
@@ -327,4 +333,23 @@ Err_exit(int status)
   struct thread *t = thread_current();
   t->exit_code = status;
   thread_exit();
+}
+void is_phy_vaddr(const void *addr)
+{
+  void *ptr = pagedir_get_page(thread_current()->pagedir, addr);
+  if(!is_user_vaddr(addr) || !ptr){
+    Err_exit(-1);
+  }
+  return;
+}
+
+void is_vbuffer(const void *buffer, unsigned size)
+{
+  char *buf = (char *) buffer;
+  for(unsigned i=0;i<size;i++){
+    if(!is_user_vaddr(buf)){
+      Err_exit(-1);
+    }
+    buf++;
+  }
 }
