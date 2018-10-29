@@ -171,6 +171,7 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
+  struct thread *cur;
 
   ASSERT (function != NULL);
 
@@ -182,9 +183,25 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  
+
   /* my code */
   list_init (&t->file_list);   // initialize file list
   t->fd = 2;      // init fd=2, which is neither 0(STDIN_FILENO) or 1(STDOUT_FILENO)
+
+  /* ??????? */
+  sema_init (&t->exec_wait, 0);  // init exec_wait = 0 as semaphorm for sys_exec()
+  t->waited = 0;         /* Intialize to 0 .If the child process has been waited, waited = 1*/
+  t->load_success = 0;                   /* Initialize to 0, If load success, update to 1 */
+  
+
+  list_init(&t->child_list);
+  cur = thread_current();
+  t->parent = cur;
+  
+  // list_push_back(&cur->child_list,&t->child_elem);
+  
+
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -465,9 +482,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->magic = THREAD_MAGIC;
   /* my code */
   t->exit_code = 0;
+
+  t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -583,6 +601,24 @@ allocate_tid (void)
 
   return tid;
 }
+
+/* my code */
+/* get the thread with the given tid */
+struct thread * get_thread(tid_t tid)
+{
+  struct list_elem *e;
+  for (e = list_begin (&all_list); e != list_end (&all_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, allelem);
+      if (t->tid == tid)
+        return t;
+    }
+  return NULL;
+}
+
+
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */

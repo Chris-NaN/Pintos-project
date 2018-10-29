@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -93,21 +94,28 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-#ifdef USERPROG
-    /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
-#endif
-
-    /* Owned by thread.c. */
-    unsigned magic;                     /* Detects stack overflow. */
-    
     /* my code */
     int exit_code;                      /* exit code to printed */
     // File Syscall
     struct list file_list;              /* Each thread has its file list */
     int fd;                             /* file discriptor, to describe file num? */
+#ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+    /* my code */
+    int waited;                         /* Initialize to 0 .If the child process has been waited, waited = 1*/
+    struct semaphore exec_wait;         /* semaphorm for syscall exec */
+    int load_success;                   /* Initialize to 0, If load success, update to 1 */
 
 
+    struct thread * parent;             /* its parent process */
+    struct list child_list;             /* store its children processes */
+    struct list_elem child_elem;         
+
+#endif
+
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -145,5 +153,10 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+/* my code */
+/* get the thread with the given tid */
+struct thread * get_thread(tid_t tid);  
+
 
 #endif /* threads/thread.h */

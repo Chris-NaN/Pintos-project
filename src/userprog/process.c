@@ -34,6 +34,10 @@ process_execute (const char *file_name)
   char *process_name;
   char *save_ptr;
 
+  /* ??????? */
+  struct thread *new_t;
+
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -46,8 +50,25 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (process_name, PRI_DEFAULT, start_process, fn_copy);
+  
+  /* my code */
   if (tid == TID_ERROR)
+  {
     palloc_free_page (fn_copy); 
+    return tid;
+  }
+  /* ??????? */
+  /* get the new thread which is to execute file_name */
+  new_t = get_thread(tid);
+  /* sema_down at first, to get whether the child process successfully loaded its executable.*/
+  
+  // list_push_back(&thread_current()->child_list,&new_t->child_elem);
+  
+  sema_down(&new_t->exec_wait);
+  
+  // load failed
+  if (new_t->load_success == 0)
+    tid = TID_ERROR;
   return tid;
 }
 
@@ -71,19 +92,30 @@ start_process (void *file_name_)
   process_name = strtok_r(file_name," ", &save_ptr);
   /**/
   success = load (process_name, &if_.eip, &if_.esp);
-
+  
+  struct thread *t=thread_current();
   /* If load failed, quit. */
   if (!success){ 
     palloc_free_page (file_name);  // free if load failed
-    thread_exit ();
+    
+    /* my code */
+    /* already know it failed to load */
+    sema_up(&t->exec_wait);
+    Err_exit(-1);   // callee exit(-1) if load fail
   }
   /* my code */
+  /* ??????? */
+
+  /*sema_up the exec_wait if load success */
+  t->load_success = 1; 
+  sema_up(&t->exec_wait);
+  
   /* setup stack if load success*/
   char *esp = (char *)if_.esp;
   char *args[128];  // limit number of arguments
   int n = 0;
   // push arguments to stack, no matter order(will be referenced by pointer later)
-  for(char *arg=strtok_r(NULL," ",&save_ptr);arg!=NULL;arg = strtok_r(NULL," ",&save_ptr)){
+  for(char *arg=process_name;arg!=NULL;arg = strtok_r(NULL," ",&save_ptr)){
     esp -= strlen(arg)+1;  // token+'\0'
     strlcpy(esp,arg,strlen(arg)+1); 
     args[n++] = esp;
@@ -134,7 +166,51 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  /* my code */
+  return -1; 
+  int exit_status=-1;
+  struct thread *child = NULL; 
+  struct thread * cur = thread_current();
+  /* check if child_tid is invalid */
+  if (child_tid == TID_ERROR)
+    return -1;
+
+  struct thread *t = get_thread(child_tid);
+  if (!t || t->status == THREAD_DYING || t->waited == 1 )
+    return -1;
+
+
+  struct list_elem *e;
+  for (e = list_begin (&cur->child_list); e != list_end (&cur->child_list);
+       e = list_next (e))
+    {
+      child = list_entry (e, struct thread, child_elem);    
+      if (child->tid == child_tid)
+      {
+        exit_status = child->exit_code;
+        child->waited = 1;
+        return exit_status;
+      }
+  }
+  sema_down(&child->parent->exec_wait);
+  
+  exit_status=-1;
+  for (e = list_begin (&cur->child_list); e != list_end (&cur->child_list);
+       e = list_next (e))
+  {
+      child = list_entry (e, struct thread, child_elem);    
+      if (child->tid == child_tid)
+      {
+        exit_status = child->exit_code;
+        child->waited = 1;
+      }
+  }
+
+  // if (!child || child->status == THREAD_DYING)
+  //   return -1;
+
+  return exit_status;
+ 
 }
 
 /* Free the current process's resources. */
@@ -511,3 +587,4 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+

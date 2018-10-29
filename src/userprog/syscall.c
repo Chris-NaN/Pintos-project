@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include "threads/malloc.h"
 #include "devices/input.h"
+#include "threads/vaddr.h"
 
 static void syscall_handler (struct intr_frame *);
 static struct file* getFile(struct thread* t, int fd);
@@ -24,12 +25,24 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  /* my code */
+  // lock_init (&exec_lock);
 }
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
-{
-  switch(*(int *)f->esp)
+{ 
+  // terminate process with exit code -1 if esp was setted to bad addr
+  if(!f || !(f->esp) || !is_user_vaddr(f->esp)){
+    printf("bad stack pointer");
+    Err_exit(-1);
+  }
+  int syscall_num = *(int *)f->esp;
+  if(syscall_num<0 || syscall_num > 20 ){
+    printf("bad sc");
+    Err_exit(-1);  // bad sc, 0 < syscall number < 21
+  }
+  switch(syscall_num)
   {
     case SYS_HALT:
     {
@@ -121,7 +134,9 @@ syscall_handler (struct intr_frame *f UNUSED)
 void
 Sys_halt()
 {
+  shutdown_power_off();
 }
+
 void
 Sys_exit(int status)
 {
@@ -133,25 +148,56 @@ Sys_exit(int status)
   t->exit_code = status; 
   thread_exit();
 }
-pid_t Sys_exec(const char* cmd_line)
+
+
+/* the parent process cannot return from the exec until it knows whether the child
+process successfully loaded its executable. */
+pid_t 
+Sys_exec(const char* cmd_line)
 {
-  return 0;
+	/* check its validity ? */
+  if (!cmd_line)
+  	return -1;
+  
+  // sema_down(&t->exec_sema);
+  // lock_acquire(&exec_lock);
+
+  pid_t pid = process_execute(cmd_line);
+
+  // lock_release(&exec_lock);
+
+  return pid;
 }
+
+
 int
 Sys_wait(pid_t pid)
 {
-  return 0;
+	/* process_wait() updated in process.c*/
+  return process_wait(pid);
 }
+
+
 bool
 Sys_create(const char* file, unsigned initial_size)
 {
-  return true;
+  /* check its validity ? */
+
+  return filesys_create(file,initial_size);
 }
+
 bool
 Sys_remove(const char* file)
 {
-  return true;
+  /* check its validity ? */
+
+  return filesys_remove(file);
 }
+
+
+
+
+
 int
 Sys_open(const char*file)
 {
@@ -205,10 +251,18 @@ Sys_seek(int fd, unsigned position)
     return;
   file_seek(f,position);
 }
-unsigned Sys_tell(int fd)
+
+
+
+unsigned 
+Sys_tell (int fd)
 {
-  return 0;
+  struct file *f = getFile(thread_current(),fd);
+  if(!f)
+    return;
+  return file_tell(f);
 }
+
 void
 Sys_close(int fd)
 {
@@ -266,4 +320,11 @@ void CloseFile(struct thread *t, int fd, bool All)
     }
 
   }
+}
+void
+Err_exit(int status)
+{
+  struct thread *t = thread_current();
+  t->exit_code = status;
+  thread_exit();
 }

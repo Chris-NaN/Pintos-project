@@ -21,6 +21,6 @@ int Sys_write(int fd, const void* buffer, unsigned length);
 void Sys_seek(int fd, unsigned position);
 unsigned Sys_tell(int fd);
 void Sys_close(int fd);
-
+void Err_exit(int status);
 
 #endif /* userprog/syscall.h */
