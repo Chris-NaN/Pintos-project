@@ -17,6 +17,9 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
+#include "threads/malloc.h"
+
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -81,6 +84,8 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  int *int_p;
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -126,7 +131,7 @@ start_process (void *file_name_)
     *esp = 0;  // data = 0
   }
   // store the addr of each auguments
-  int *int_p = (int *) esp;
+  int_p = (int *) esp;
   *--int_p=0;   // argv[4] = 0
   // store addr of args
   for(int i=n-1;i>=0;i--){
@@ -167,47 +172,58 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   /* my code */
-  return -1; 
+  // return -1; 
   int exit_status=-1;
   struct thread *child = NULL; 
   struct thread * cur = thread_current();
   /* check if child_tid is invalid */
   if (child_tid == TID_ERROR)
     return -1;
+  // printf("%s\n","*****************************************");
+  struct child_node *cnode = get_child_node(cur,child_tid);
+  // printf("%s\n","!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+  // printf("%s\n", );
 
-  struct thread *t = get_thread(child_tid);
-  if (!t || t->status == THREAD_DYING || t->waited == 1 )
-    return -1;
-
-
-  struct list_elem *e;
-  for (e = list_begin (&cur->child_list); e != list_end (&cur->child_list);
-       e = list_next (e))
-    {
-      child = list_entry (e, struct thread, child_elem);    
-      if (child->tid == child_tid)
-      {
-        exit_status = child->exit_code;
-        child->waited = 1;
-        return exit_status;
-      }
-  }
-  sema_down(&child->parent->exec_wait);
-  
-  exit_status=-1;
-  for (e = list_begin (&cur->child_list); e != list_end (&cur->child_list);
-       e = list_next (e))
+  if (cnode!=NULL)
   {
-      child = list_entry (e, struct thread, child_elem);    
-      if (child->tid == child_tid)
-      {
-        exit_status = child->exit_code;
-        child->waited = 1;
-      }
+    return cnode->exit_status;
   }
+  else
+  {
 
+    child = get_thread(child_tid);
+    if (!child || child->waited == 1)
+      return -1;
+
+    child->waited = 1;
+    sema_down(&child->parent->wait_sema);
+    
+    cnode = get_child_node(thread_current(),child_tid);
+    exit_status=cnode->exit_status;
   // if (!child || child->status == THREAD_DYING)
   //   return -1;
+  }
+  // child = get_thread(child_tid);
+  // if (!child || child->waited == 1)
+  // {
+  //   return -1;
+  // }
+  // else
+  // {
+    
+  //   if (child->exited == 1)
+  //     return child->exit_code;
+
+  //   child->waited = 1;
+  //   sema_down(&child->parent->wait_sema);
+    
+  //   exit_status = child->exit_code;
+
+  // // if (!child || child->status == THREAD_DYING)
+  // //   return -1;
+  // }
+
+
 
   return exit_status;
  
@@ -219,7 +235,6 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -233,6 +248,38 @@ process_exit (void)
          directory, or our active page directory will be one
          that's been freed (and cleared). */
       printf("%s: exit(%d)\n",cur->name,cur->exit_code);
+
+
+        /* my code */
+
+      if ((cur->parent!=NULL)&&(cur->parent->tid != cur->tid )){
+      struct child_node * cnode = malloc(sizeof(struct child_node));
+      cnode->pid = cur->tid;  
+      cnode->exit_status = cur->exit_code;
+      // printf("%s\n","&&&&&&&&&&&&&&&&&&&&&");
+      // printf("------------parent id %d\n",cur->parent->tid);
+      list_push_back(&cur->parent->child_list,&cnode->elem);
+      
+      // printf("%s\n","&&&&&&&&&&&&&*****************&&&&&&&&");
+      }
+    if (cur->waited == 1)
+    {
+      while (!list_empty (&cur->parent->wait_sema.waiters))
+        {
+          sema_up (&cur->parent->wait_sema);
+        }
+  /* if has parent */
+
+      
+    }
+    cur->exited = 1;
+
+    while(!list_empty(&cur->child_list))
+    {
+      struct child_node *node = list_entry(list_pop_front(&cur->child_list), struct child_node, elem);
+      free(node);
+    }
+
       /*my code above*/
       cur->pagedir = NULL;
       pagedir_activate (NULL);

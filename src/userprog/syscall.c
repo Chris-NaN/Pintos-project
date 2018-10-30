@@ -11,6 +11,11 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 
+#include "userprog/process.h"
+#include "devices/shutdown.h"
+#include "threads/synch.h"
+
+
 static void syscall_handler (struct intr_frame *);
 static struct file* getFile(struct thread* t, int fd);
 void CloseFile(struct thread *t, int fd, bool All);
@@ -28,8 +33,6 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  /* my code */
-  // lock_init (&exec_lock);
 }
 
 static void
@@ -168,12 +171,7 @@ Sys_exec(const char* cmd_line)
   if (!cmd_line)
   	return -1;
   
-  // sema_down(&t->exec_sema);
-  // lock_acquire(&exec_lock);
-
   pid_t pid = process_execute(cmd_line);
-
-  // lock_release(&exec_lock);
 
   return pid;
 }
@@ -264,8 +262,8 @@ unsigned
 Sys_tell (int fd)
 {
   struct file *f = getFile(thread_current(),fd);
-  if(!f)
-    return;
+  // if(!f)
+  //   return;
   return file_tell(f);
 }
 

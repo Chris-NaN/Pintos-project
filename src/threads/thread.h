@@ -15,6 +15,8 @@ enum thread_status
     THREAD_DYING        /* About to be destroyed. */
   };
 
+
+
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
@@ -24,6 +26,16 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+
+
+/* my code */
+struct child_node
+{
+  tid_t pid;  
+  int exit_status;             
+  struct list_elem elem;
+};
 
 /* A kernel thread or user process.
 
@@ -96,22 +108,26 @@ struct thread
 
     /* my code */
     int exit_code;                      /* exit code to printed */
+    int exited;                        /* whether it has been exited */
+
     // File Syscall
     struct list file_list;              /* Each thread has its file list */
     int fd;                             /* file discriptor, to describe file num? */
+    struct list child_list;             /* store its children processes */
+    struct list_elem child_elem;
+
+    struct semaphore exec_wait;         /* semaphorm for syscall exec */
+    struct semaphore wait_sema;         /* semaphorm of the parent process waiting for the child process finishing */
+
+    int load_success;                   /* Initialize to 0, If load success, update to 1 */
+    int waited;                     /* Initialize to 0 .If the child process has been waited, waited = 1*/
+
+    struct thread * parent;             /* its parent process */
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     /* my code */
-    int waited;                         /* Initialize to 0 .If the child process has been waited, waited = 1*/
-    struct semaphore exec_wait;         /* semaphorm for syscall exec */
-    int load_success;                   /* Initialize to 0, If load success, update to 1 */
-
-
-    struct thread * parent;             /* its parent process */
-    struct list child_list;             /* store its children processes */
-    struct list_elem child_elem;         
-
 #endif
 
     /* Owned by thread.c. */
@@ -157,6 +173,8 @@ int thread_get_load_avg (void);
 /* my code */
 /* get the thread with the given tid */
 struct thread * get_thread(tid_t tid);  
+/* get the child_node which contains its exit status */
+struct child_node * get_child_node(struct thread *par,tid_t child_pid);
 
 
 #endif /* threads/thread.h */
