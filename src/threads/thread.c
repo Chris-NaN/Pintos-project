@@ -190,28 +190,16 @@ thread_create (const char *name, int priority,
   /* my code */
   list_init (&t->file_list);   // initialize file list
   t->fd = 2;      // init fd=2, which is neither 0(STDIN_FILENO) or 1(STDOUT_FILENO)
-
-  /* ??????? */
-
-  t->waited = 0;                 /* Intialize to 0 .If the child process has been waited, waited = 1*/
-  t->load_success = 0;           /* Initialize to 0, If load success, update to 1 */
-  t->exited = 0;
-
-   
-
-  t->exited = 0;
   t->parent = thread_current();
-
-  // struct child_node *node = malloc(sizeof(struct child_node));
-  // have to do free operation later, or it will occur mem leak
-  // node-> = t;
-  // node->waited = 0;
-
-  // push node into parent process' child_list
-  // if (thread_current () != initial_thread)
-  //   list_push_back(&cur->child_list,&t->child_elem);
   
-
+  /* push the child_node to its parent's child_list */
+  struct child_node * cnode = malloc(sizeof(struct child_node));
+  cnode->pid = t->tid;  
+  cnode->exited = 0;
+  cnode->load_success=0;
+  cnode->waited = 0;
+  list_push_back(&t->parent->child_list,&cnode->elem);
+  
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -634,6 +622,8 @@ struct thread * get_thread(tid_t tid)
 /* get the child_node which contains its exit status */
 struct child_node * get_child_node(struct thread *par,tid_t child_pid)
 {
+  if (!par)
+    return NULL;
   struct list_elem *e;
   for (e = list_begin (&par->child_list); e != list_end (&par->child_list);
        e = list_next (e))

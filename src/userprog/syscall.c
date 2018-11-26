@@ -19,16 +19,11 @@
 static void syscall_handler (struct intr_frame *);
 static struct file* getFile(struct thread* t, int fd);
 void CloseFile(struct thread *t, int fd, bool All);
-void is_phy_vaddr(const void *addr);
-void is_vbuffer(const void *buffer, unsigned size);
-void check_vaddr (const void *ptr);
-
-struct file_node
-{
-  struct file *file;
-  int fd;
-  struct list_elem elem;
-};
+void is_mapped_vaddr(const void *addr);       /* check whether the user virtual address is valid mapped to the physical address*/
+void is_vbuffer(const void *buffer, unsigned size);  /* check the buffer byte by byte from head to tail */
+void check_vaddr (const void *ptr);         /* check whether the address is valid user virtual address */
+void check_each_byte(const void* pointer);  /* check four bytes related to a pointer */
+void check_string(const void* pointer);  /* check the string byte by byte from head to tail */
 
 void
 syscall_init (void) 
@@ -43,10 +38,17 @@ syscall_handler (struct intr_frame *f UNUSED)
   if(!f || !(f->esp)){  // check if ponter is NULL
     Err_exit(-1);
   }
-  check_vaddr(f->esp);  // check if f->esp is valid address
+
+  /* check validity of pointers and whether the pointer is valid mapped */
+  check_each_byte((int *)f->esp);
+  check_each_byte(((int *)f->esp)+1);
+  check_each_byte(((int *)f->esp)+2);
+  check_each_byte(((int *)f->esp)+3);
+
   int syscall_num = *(int *)f->esp;
+  
   if(syscall_num <0 || syscall_num > 20 ){
-    Err_exit(-1);  // bad sc, 0 < syscall number < 21
+    Err_exit(-1);  
   }
   switch(syscall_num)
   {
@@ -57,83 +59,71 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_EXIT:
     {
-      check_vaddr((int *)f->esp+1);
       int status = *((int*)f->esp+1);
       Sys_exit(status);
       break;
     }
     case SYS_EXEC:
     {
-      check_vaddr((int *)f->esp+1);
       const char* cmd_line = (char *)*((int*)f->esp+1);
-      is_phy_vaddr(cmd_line);
-      Sys_exec(cmd_line);
+      check_string(cmd_line);
+      f->eax = Sys_exec(cmd_line);
       break;
     }
     case SYS_WAIT:
     {
-      check_vaddr((int *)f->esp+1);
       pid_t pid =  *((int*)f->esp+1);
       f->eax = Sys_wait(pid);
       break;
     }
     case SYS_CREATE:
     {
-      check_vaddr((int *)f->esp+2);
       const char*file =(char *) *((int*)f->esp+1);
-      is_phy_vaddr(file);
+      is_mapped_vaddr(file);
       unsigned initial_size =  *((int*)f->esp+2);
       f->eax = Sys_create(file,initial_size);
       break;
     }
     case SYS_REMOVE:
     {
-      check_vaddr((int *)f->esp+1);
       const char* file = (char *) *((int*)f->esp+1);
-      is_phy_vaddr(file);
+      is_mapped_vaddr(file);
       f->eax = Sys_remove(file);
       break;
     }
     case SYS_OPEN:
     {
-      check_vaddr((int *)f->esp+1);
       const char* file = (char *)*((int*)f->esp+1);
-      is_phy_vaddr(file);
+      is_mapped_vaddr(file);
       f->eax = Sys_open(file);
       break;
     }
     case SYS_FILESIZE:
     {
-      check_vaddr((int *)f->esp+1);
       int fd =  *((int*)f->esp+1);
       f->eax = Sys_filesize(fd);
       break;
     }
     case SYS_READ:
     {
-      check_vaddr((int *)f->esp+3);
       int fd = *((int*)f->esp+1);
       void* buffer = (void *)*((int*)f->esp+2);
       unsigned size= *((int*)f->esp+3);
       is_vbuffer(buffer,size);
-      is_phy_vaddr(buffer);
       f->eax = Sys_read(fd, buffer, size);
       break;
     }
     case SYS_WRITE:
     {
-      check_vaddr((int *)f->esp+3);
       int fd = *((int*)f->esp+1);
       const void* buffer = (void *)*((int *)f->esp+2);
       unsigned size = *((int *)f->esp+3);
       is_vbuffer(buffer,size);
-      is_phy_vaddr(buffer);
       f->eax = Sys_write(fd,buffer,size);
       break;
     }
     case SYS_SEEK:
     {
-      check_vaddr((int *)f->esp+2);
       int fd = *((int*)f->esp+1);
       unsigned position = *((int*)f->esp+2);
       Sys_seek(fd, position);
@@ -141,14 +131,12 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_TELL:
     {  
-      check_vaddr((int *)f->esp+1);
       int fd = *((int*)f->esp+1);
       f->eax = Sys_tell(fd);
       break;
     }
     case SYS_CLOSE:
     { 
-      check_vaddr((int *)f->esp+1);
       int fd = *((int*)f->esp+1);
       Sys_close(fd);
       break;
@@ -165,9 +153,6 @@ Sys_halt()
 void
 Sys_exit(int status)
 {
-  // If the process's parent waits for it,this is the status that will be returned
-  // something to implement later
-
   struct thread *t = thread_current();
   /* store process return status which will be printed when process return*/
   t->exit_code = status; 
@@ -180,28 +165,21 @@ process successfully loaded its executable. */
 pid_t 
 Sys_exec(const char* cmd_line)
 {
-	/* check its validity ? */
   if (!cmd_line)
   	return -1;
-  
   pid_t pid = process_execute(cmd_line);
-
   return pid;
 }
-
 
 int
 Sys_wait(pid_t pid)
 {
-	/* process_wait() updated in process.c*/
   return process_wait(pid);
 }
-
 
 bool
 Sys_create(const char* file, unsigned initial_size)
 {
-  /* check its validity ? */
   if(!file)
     return false;
   return filesys_create(file,initial_size);
@@ -210,8 +188,6 @@ Sys_create(const char* file, unsigned initial_size)
 bool
 Sys_remove(const char* file)
 {
-  /* check its validity ? */
-
   return filesys_remove(file);
 }
 
@@ -270,14 +246,12 @@ Sys_seek(int fd, unsigned position)
   file_seek(f,position);
 }
 
-
-
 unsigned 
 Sys_tell (int fd)
 {
   struct file *f = getFile(thread_current(),fd);
-  // if(!f)
-  //   return;
+  if(!f)
+    return -1;
   return file_tell(f);
 }
 
@@ -304,6 +278,7 @@ Sys_write(int fd, const void *buffer, unsigned size)
   return bytes;
 
 }
+
 struct file* getFile(struct thread* t, int fd)
 {
   struct list_elem *e;
@@ -346,25 +321,57 @@ Err_exit(int status)
   t->exit_code = status;
   thread_exit();
 }
+
 void check_vaddr (const void *ptr)
 {
-  if(!is_user_vaddr(ptr) || ptr < 0x08048000)
+  if(!is_user_vaddr(ptr) || ptr < USER_VADDR_BASE)
     Err_exit(-1);
 }
-void is_phy_vaddr(const void *addr)
+
+void is_mapped_vaddr(const void *addr)
 {
-  void *ptr = pagedir_get_page(thread_current()->pagedir, addr);
-  if(!is_user_vaddr(addr) || !ptr){
-    Err_exit(-1);
+  if (is_user_vaddr(addr))
+  {
+    void *ptr = pagedir_get_page(thread_current()->pagedir, addr);
+    if(!ptr)
+      Err_exit(-1);
   }
-  return;
 }
 
 void is_vbuffer(const void *buffer, unsigned size)
 {
   char *buf = (char *) buffer;
-  for(unsigned i=0;i<size;i++){
+  for(unsigned i=0;i<size;i++)
+  {
     check_vaddr((const void *) buf);
+    is_mapped_vaddr(buf);
     buf++;
   }
 }
+
+void check_each_byte(const void* pointer)
+{
+  unsigned char* pt = (unsigned char*) pointer;
+  for (int i=0;i<4;i++)
+  {
+    check_vaddr((const void*) pt);
+    is_mapped_vaddr((const void*) pt);
+    pt++;
+  }
+}
+
+void check_string(const void* pointer)
+{
+  char* pt = (char*) pointer;
+  while(pagedir_get_page(thread_current()->pagedir,(void *)pt))
+  {
+    check_vaddr((const void*) pt);
+    if (*pt == '\0')
+      return;
+    pt++;
+  }
+  Err_exit(-1);
+}
+
+
+

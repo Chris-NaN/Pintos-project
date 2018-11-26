@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
+#include "filesys/file.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -32,8 +33,11 @@ typedef int tid_t;
 /* my code */
 struct child_node
 {
-  tid_t pid;  
-  int exit_status;             
+  tid_t pid;                          /* child process' id */
+  int exited;                         /* whether the child process has exited */  
+  int exit_status;                    /* the exit code when the child process exited*/       
+  int load_success;                   /* Init to 0, if load success, load_success = 1 */
+  int waited;                         /* whether the child process has been waited by parent */
   struct list_elem elem;
 };
 
@@ -108,26 +112,19 @@ struct thread
 
     /* my code */
     int exit_code;                      /* exit code to printed */
-    int exited;                        /* whether it has been exited */
-
+    
     // File Syscall
     struct list file_list;              /* Each thread has its file list */
     int fd;                             /* file discriptor, to describe file num? */
-    struct list child_list;             /* store its children processes */
-    struct list_elem child_elem;
-
+    struct list child_list;             /* store its children processes' status */
     struct semaphore exec_wait;         /* semaphorm for syscall exec */
     struct semaphore wait_sema;         /* semaphorm of the parent process waiting for the child process finishing */
-
-    int load_success;                   /* Initialize to 0, If load success, update to 1 */
-    int waited;                     /* Initialize to 0 .If the child process has been waited, waited = 1*/
-
+    struct file * exec_file;
     struct thread * parent;             /* its parent process */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
-    /* my code */
+    uint32_t *pagedir;                  /* Page directory. */    
 #endif
 
     /* Owned by thread.c. */
@@ -173,7 +170,7 @@ int thread_get_load_avg (void);
 /* my code */
 /* get the thread with the given tid */
 struct thread * get_thread(tid_t tid);  
-/* get the child_node which contains its exit status */
+/* get the child_node which contains its status */
 struct child_node * get_child_node(struct thread *par,tid_t child_pid);
 
 

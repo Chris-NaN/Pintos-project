@@ -36,42 +36,50 @@ process_execute (const char *file_name)
   /* my code */
   char *process_name;
   char *save_ptr;
-
-  /* ??????? */
   struct thread *new_t;
-
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
+
   strlcpy (fn_copy, file_name, PGSIZE);
-  
-  /* my code */
-  process_name = strtok_r((char *)file_name," ",&save_ptr); // split name
+
+  /* my code*/
+  /* copy the file_name to fn_strtok, fn_strtok will be cut off*/
+  char* fn_strtok = malloc(strlen(file_name)+1);
+  if (fn_strtok==NULL)
+    return TID_ERROR;
+
+  memcpy (fn_strtok, file_name, strlen (file_name) + 1);
+
+  process_name = strtok_r((char *)fn_strtok," ",&save_ptr); // split name
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (process_name, PRI_DEFAULT, start_process, fn_copy);
-  
-  /* my code */
+
   if (tid == TID_ERROR)
   {
     palloc_free_page (fn_copy); 
+    free(fn_strtok);
     return tid;
   }
-  /* ??????? */
+
   /* get the new thread which is to execute file_name */
   new_t = get_thread(tid);
+  
+  /* get the corresponding child_node */
+  struct child_node * cnode = get_child_node(thread_current(),tid);
+
   /* sema_down at first, to get whether the child process successfully loaded its executable.*/
+  sema_down(&new_t->parent->exec_wait);
   
-  // list_push_back(&thread_current()->child_list,&new_t->child_elem);
-  
-  sema_down(&new_t->exec_wait);
-  
-  // load failed
-  if (new_t->load_success == 0)
-    tid = TID_ERROR;
+  /* if load failed */
+  if (cnode->load_success == 0)
+    tid = -1;
+
+  free(fn_strtok);
   return tid;
 }
 
@@ -80,7 +88,9 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+  
   char *file_name = file_name_;
+  
   struct intr_frame if_;
   bool success;
 
@@ -97,24 +107,27 @@ start_process (void *file_name_)
   process_name = strtok_r(file_name," ", &save_ptr);
   /**/
   success = load (process_name, &if_.eip, &if_.esp);
-  
+
   struct thread *t=thread_current();
+  struct child_node * cnode = get_child_node(t->parent,t->tid);
+
   /* If load failed, quit. */
   if (!success){ 
     palloc_free_page (file_name);  // free if load failed
-    
     /* my code */
     /* already know it failed to load */
-    sema_up(&t->exec_wait);
+    if (cnode)
+      sema_up(&t->parent->exec_wait);
     Err_exit(-1);   // callee exit(-1) if load fail
   }
   /* my code */
-  /* ??????? */
-
   /*sema_up the exec_wait if load success */
-  t->load_success = 1; 
-  sema_up(&t->exec_wait);
-  
+  if (cnode)
+  {
+  cnode->load_success = 1; 
+  sema_up(&t->parent->exec_wait);
+  }
+
   /* setup stack if load success*/
   char *esp = (char *)if_.esp;
   char *args[128];  // limit number of arguments
@@ -145,6 +158,7 @@ start_process (void *file_name_)
   *--int_p = 0;
   // stack pointer would be initialized to top of the stack
   if_.esp = (void *)int_p;
+
   palloc_free_page (file_name);  // free if load successed and stack has been setted up
 
   
@@ -165,66 +179,46 @@ start_process (void *file_name_)
    child of the calling process, or if process_wait() has already
    been successfully called for the given TID, returns -1
    immediately, without waiting.
-
-   This function will be implemented in problem 2-2.  For now, it
-   does nothing. */
+*/
 int
 process_wait (tid_t child_tid UNUSED) 
 {
   /* my code */
-  // return -1; 
   int exit_status=-1;
   struct thread *child = NULL; 
   struct thread * cur = thread_current();
-  /* check if child_tid is invalid */
-  if (child_tid == TID_ERROR)
-    return -1;
-  // printf("%s\n","*****************************************");
   struct child_node *cnode = get_child_node(cur,child_tid);
-  // printf("%s\n","!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-  // printf("%s\n", );
+  /* check if child_tid is invalid 
+   !cnode means the child process does not exist */
+  if (child_tid == TID_ERROR || !cnode)
+    return -1;
+  /* cnode->waited == 1 means the child process has been waited (can not be waited twice)*/
+  if (cnode->waited == 1)
+    goto done;
 
-  if (cnode!=NULL)
+  cnode->waited = 1;
+
+  /* the child process has already exited , just return it's exit status*/
+  if (cnode -> exited == 1)
   {
-    return cnode->exit_status;
+    exit_status = cnode->exit_status;
+    goto done;
   }
-  else
-  {
 
-    child = get_thread(child_tid);
-    if (!child || child->waited == 1)
-      return -1;
+  child = get_thread(child_tid);
+  if (child->status == THREAD_DYING)
+    goto done;
+  
+  /*let the parent waits for its child process finish */
+  sema_down(&child->parent->wait_sema); 
 
-    child->waited = 1;
-    sema_down(&child->parent->wait_sema);
-    
-    cnode = get_child_node(thread_current(),child_tid);
-    exit_status=cnode->exit_status;
-  // if (!child || child->status == THREAD_DYING)
-  //   return -1;
-  }
-  // child = get_thread(child_tid);
-  // if (!child || child->waited == 1)
-  // {
-  //   return -1;
-  // }
-  // else
-  // {
-    
-  //   if (child->exited == 1)
-  //     return child->exit_code;
+  cnode = get_child_node(cur,child_tid);
 
-  //   child->waited = 1;
-  //   sema_down(&child->parent->wait_sema);
-    
-  //   exit_status = child->exit_code;
+  exit_status=cnode->exit_status;
 
-  // // if (!child || child->status == THREAD_DYING)
-  // //   return -1;
-  // }
-
-
-
+done:
+  list_remove(&cnode->elem);
+  free(cnode);
   return exit_status;
  
 }
@@ -235,6 +229,8 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  struct child_node * cnode;
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -250,35 +246,36 @@ process_exit (void)
       printf("%s: exit(%d)\n",cur->name,cur->exit_code);
 
 
-        /* my code */
-
-      if ((cur->parent!=NULL)&&(cur->parent->tid != cur->tid )){
-      struct child_node * cnode = malloc(sizeof(struct child_node));
-      cnode->pid = cur->tid;  
-      cnode->exit_status = cur->exit_code;
-      // printf("%s\n","&&&&&&&&&&&&&&&&&&&&&");
-      // printf("------------parent id %d\n",cur->parent->tid);
-      list_push_back(&cur->parent->child_list,&cnode->elem);
-      
-      // printf("%s\n","&&&&&&&&&&&&&*****************&&&&&&&&");
+      /* my code */
+      if (cur->exec_file)
+      {
+        file_allow_write(cur->exec_file);
+        file_close(cur->exec_file);
       }
-    if (cur->waited == 1)
-    {
-      while (!list_empty (&cur->parent->wait_sema.waiters))
-        {
+      /* free the memory of its file_list*/
+       while(!list_empty(&cur->file_list))
+      {
+        struct file_node *nd = list_entry(list_pop_front(&cur->file_list), struct file_node, elem);
+        file_close(nd->file);
+        free(nd);
+      }
+
+      /* free the memory of its child_list */
+      while(!list_empty(&cur->child_list))
+      {
+        struct child_node *node = list_entry(list_pop_front(&cur->child_list), struct child_node, elem);
+        free(node);
+      }
+
+      cnode = get_child_node(cur->parent,cur->tid);
+      if (cnode)
+      {
+        cnode->exit_status = cur->exit_code;  
+        cnode->exited = 1;
+        /* if its parent is waiting for it to finish , sema_up the wait_sema of its parent*/
+        if (cnode->waited == 1)      
           sema_up (&cur->parent->wait_sema);
-        }
-  /* if has parent */
-
-      
-    }
-    cur->exited = 1;
-
-    while(!list_empty(&cur->child_list))
-    {
-      struct child_node *node = list_entry(list_pop_front(&cur->child_list), struct child_node, elem);
-      free(node);
-    }
+      }
 
       /*my code above*/
       cur->pagedir = NULL;
@@ -483,7 +480,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  /* my code */
+  if (success)
+  {
+    struct thread* t = thread_current();
+    t->exec_file = file;
+    file_deny_write(t->exec_file);
+  }
+  else
+  {
+    file_close (file);
+  }
   return success;
 }
 

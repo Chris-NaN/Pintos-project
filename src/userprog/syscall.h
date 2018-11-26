@@ -2,8 +2,16 @@
 #define USERPROG_SYSCALL_H
 #include <stdbool.h>
 #include <debug.h>
+#include "userprog/process.h"
 
 typedef int pid_t;
+
+struct file_node
+{
+  struct file *file;
+  int fd;
+  struct list_elem elem;
+};
 
 void syscall_init (void);
 
