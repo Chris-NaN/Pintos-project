@@ -6,6 +6,9 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/syscall.h"
+#include "vm/page.h"
+#include "vm/frame.h"
+
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -151,10 +154,39 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   /* my code */
-  /* if the page fault was caused by user prog, and the fault address 
-    should not be read or written by user prog , exit the process */ 
+  
+  // /* proj2 */
+  //  if the page fault was caused by user prog, and the fault address 
+  //   should not be read or written by user prog , exit the process  
   if ((user)&&(!is_user_vaddr(fault_addr) || fault_addr < USER_VADDR_BASE))
     Err_exit(-1);
+  /* proj2 end*/
+
+  /* proj3 */
+  if ((not_present) && is_user_vaddr(fault_addr) && fault_addr >= USER_VADDR_BASE )
+  {
+    // printf("%s\n","-------------1-------------------");
+    struct spt_node * sptnode = get_spt_node(fault_addr);
+    // printf("%s\n","-------------2-------------------");
+    
+
+    if (!sptnode)
+    {
+      /* ??? */
+      // printf("-----------2.5-----------");
+    }
+
+    if (load_page_from_file(sptnode))
+    {
+      // printf("%s\n","-------------3-------------------");
+      return;
+    }
+  }
+
+
+
+
+
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to

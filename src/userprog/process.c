@@ -20,6 +20,9 @@
 #include "userprog/syscall.h"
 #include "threads/malloc.h"
 
+#include "vm/frame.h"
+#include "vm/page.h"
+
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -96,6 +99,11 @@ start_process (void *file_name_)
 
   int *int_p;
 
+
+    /* proj3 */
+  list_init(&thread_current()->spt);
+    /* proj3 end*/
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -127,6 +135,7 @@ start_process (void *file_name_)
   cnode->load_success = 1; 
   sema_up(&t->parent->exec_wait);
   }
+
 
   /* setup stack if load success*/
   char *esp = (char *)if_.esp;
@@ -160,8 +169,6 @@ start_process (void *file_name_)
   if_.esp = (void *)int_p;
 
   palloc_free_page (file_name);  // free if load successed and stack has been setted up
-
-  
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -220,7 +227,6 @@ done:
   list_remove(&cnode->elem);
   free(cnode);
   return exit_status;
- 
 }
 
 /* Free the current process's resources. */
@@ -494,9 +500,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   return success;
 }
 
-/* load() helpers. */
-
-static bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -574,6 +577,27 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
+            /* proj3 */
+      // if (!spt_add_segment(file, ofs, upage,read_bytes, zero_bytes, writable))
+      //   return false;
+
+#ifdef VM
+      struct spt_node* sptnode = malloc(sizeof(struct spt_node));
+
+      if (!sptnode)
+        return false;
+      sptnode->file = file;
+      sptnode->upage = upage;
+      sptnode->read_bytes = read_bytes;
+      sptnode->zero_bytes = zero_bytes;
+      sptnode->ofs = ofs;
+      sptnode->writable = writable;
+      list_push_back(&thread_current()->spt,&sptnode->elem);
+
+      /* proj3 end*/
+      // printf("**********************************************************************************************************\n");
+#else
+       // printf("fkfkfkfkfkfkfkkfkfkfkfkfkffffffffffffffffffffffffffffff\n");
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
       if (kpage == NULL)
@@ -594,10 +618,18 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           return false; 
         }
 
+#endif
+
+
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+
+#ifdef VM
+      /* proj3 */
+      ofs += page_read_bytes;
+#endif
     }
   return true;
 }
@@ -631,7 +663,7 @@ setup_stack (void **esp)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
+bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();

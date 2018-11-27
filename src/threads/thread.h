@@ -127,6 +127,11 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */    
 #endif
 
+    /* proj3 */
+    struct list spt;
+
+
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
