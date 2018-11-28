@@ -130,6 +130,8 @@ struct thread
     /* proj3 */
     struct list spt;
     int mmap_counter;
+    /* stack growth */
+    void* stack_pointer;
 
 
     /* Owned by thread.c. */

@@ -484,7 +484,7 @@ void is_vbuffer(const void *buffer, unsigned size)
   for(unsigned i=0;i<size;i++)
   {
     check_vaddr((const void *) buf);
-    // is_mapped_vaddr(buf);
+    is_mapped_vaddr(buf);
     buf++;
   }
 }

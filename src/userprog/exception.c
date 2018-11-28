@@ -157,9 +157,6 @@ page_fault (struct intr_frame *f)
   // /* proj2 */
   //  if the page fault was caused by user prog, and the fault address 
   //   should not be read or written by user prog , exit the process  
-  if ((user)&&(!is_user_vaddr(fault_addr) || fault_addr < USER_VADDR_BASE)){
-     // printf("%s\n","-------------1-------------------");
-    Err_exit(-1);}
   /* proj2 end*/
 
     // printf("---------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^--------------\n");
@@ -183,21 +180,31 @@ page_fault (struct intr_frame *f)
       
       if (sptnode){
         load = load_page_from_file(sptnode);
-      }else if(fault_addr >= f->esp - 32){
-        load = grow_stack();
+      }else if(fault_addr >= f->esp || (f->esp-fault_addr)==32|| (f->esp-fault_addr)==4){
+        thread_current() -> stack_pointer = f->esp;
+        load = grow_stack(fault_addr);
       }
 
-      if (!load)
-      {
-        Err_exit(-1);
-      }else{
-        return;
-      }
       // if (load_page_from_file(sptnode))
       // {
       //   return;
       // }
-    }
+     }
+     if (!load)
+     {
+       Err_exit(-1);
+     }else{
+       return;
+     }
+  }else{
+    // pointer is in syscall
+    Err_exit(-1);
+    printf("------exceptioin-----");
+    if(fault_addr >= thread_current()->stack_pointer)
+      Err_exit(-1);
+    //else:
+      // invalid addr
+      
   }
 
 
