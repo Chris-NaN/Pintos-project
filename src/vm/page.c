@@ -93,15 +93,17 @@ bool grow_stack (void *user_vaddr)
         return false;
     }
     // no complete
-    spt_node->writable = true;
-    uint8_t new_frame = frame_allocate(PAL_USER);
+    sptnode->upage = pg_round_down(user_vaddr);
+    sptnode->writable = true;
+    uint8_t* new_frame = frame_allocate(PAL_USER);
     if(new_frame==NULL){
         free(sptnode);
         return false;
     }
     if (!install_page (sptnode->upage, new_frame, sptnode->writable)) 
     {
-        frame_remove(kpage);
+	free(sptnode);
+        frame_remove(new_frame);
         return false; 
     }
 
