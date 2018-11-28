@@ -17,6 +17,7 @@
 
 // my code
 #include "vm/page.h"
+#include "vm/frame.h"
 
 static void syscall_handler (struct intr_frame *);
 static struct file* getFile(struct thread* t, int fd);
@@ -125,7 +126,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       void* buffer = (void *)*((int*)f->esp+2);
       unsigned size= *((int*)f->esp+3);
       // my code
-      is_vbuffer(buffer,size, f-esp, true);
+      is_vbuffer(buffer,size, f->esp, true);
       f->eax = Sys_read(fd, buffer, size);
       break;
     }
@@ -385,8 +386,8 @@ void is_vbuffer(const void *buffer, unsigned size, void* esp, bool to_write)
     // is_mapped_vaddr(buf);
     struct spt_node* sptnode = check_byte((void*) buf,esp);
     // check if page is writable
-    if (spt_node && to_write){
-      if (spt_node->writable) exit(-1);
+    if (sptnode && to_write){
+      if (sptnode->writable) Err_exit(-1);
     }
     buf++;
   }
@@ -401,7 +402,7 @@ void check_each_byte(const void* pointer, void* esp)
     check_vaddr((const void*) pt);
     // we could allocate page if there is no mapped_vaddr
     // is_mapped_vaddr((const void*) pt);
-    check_byte((void*)pt);
+    check_byte((void*)pt,esp);
     pt++;
   }
   
@@ -426,18 +427,18 @@ struct spt_node* check_byte(const void* pointer, void* esp)
   check_vaddr((const void*) pointer);
   bool isloaded = false;
   struct spt_node* sptnode = get_spt_node((void*) pointer);
-  // if node is in table
+  /*// if node is in table
   if (sptnode){
     // load page
     load_page_from_file(sptnode);
     // is_loaded
-    isloaded = spt_node->is_loaded;
+    isloaded = sptnode->loaded;
   }else if (pointer >= esp - 32){  // it can fault 32 bytes below the stack pointer.
-    isloaded = grow_stack((void*) pointer);
+    //isloaded = grow_stack((void*) pointer);
   }
-  if (isloaded){
-    exit(-1);
-  }
+  if (!isloaded){
+    Err_exit(-1);
+  }*/
   return sptnode;
 }
 
@@ -550,9 +551,6 @@ Sys_munmap(int mapid)
             pagedir_clear_page(t->pagedir, sptnode->upage);
           }
           
-
-
-
           // file_close(sptnode->file);
           list_remove(tmp);
           free(sptnode);

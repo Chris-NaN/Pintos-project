@@ -8,6 +8,9 @@
 #include "threads/thread.h"
 #include "filesys/file.h"
 #include "filesys/off_t.h"
+
+#define MAX_STACK_SIZE (1<<24)
+
 struct spt_node
 {
 
