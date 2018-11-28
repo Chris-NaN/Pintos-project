@@ -9,7 +9,6 @@
 #include "vm/page.h"
 #include "vm/frame.h"
 
-
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -175,23 +174,30 @@ page_fault (struct intr_frame *f)
   if (user)
   {
     // printf("%s\n","-------------0.5-------------------");
+    bool load = false;
     if (not_present && is_user_vaddr(fault_addr) && fault_addr >= USER_VADDR_BASE )
     {
     // printf("%s\n","-------------1-------------------");
       struct spt_node * sptnode = get_spt_node(fault_addr);
     // printf("%s\n","-------------2-------------------");
-    
+      
+      if (sptnode){
+        load = load_page_from_file(sptnode);
+      }else if(fault_addr >= f->esp - 32){
+        load = grow_stack();
+      }
 
-      if (!sptnode)
+      if (!load)
       {
         Err_exit(-1);
-      }
-      if (load_page_from_file(sptnode))
-      {
+      }else{
         return;
       }
+      // if (load_page_from_file(sptnode))
+      // {
+      //   return;
+      // }
     }
-    Err_exit(-1);
   }
 
 
