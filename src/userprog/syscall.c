@@ -15,15 +15,21 @@
 #include "devices/shutdown.h"
 #include "threads/synch.h"
 
+// my code
+#include "vm/page.h"
 
 static void syscall_handler (struct intr_frame *);
 static struct file* getFile(struct thread* t, int fd);
 void CloseFile(struct thread *t, int fd, bool All);
 void is_mapped_vaddr(const void *addr);       /* check whether the user virtual address is valid mapped to the physical address*/
-void is_vbuffer(const void *buffer, unsigned size);  /* check the buffer byte by byte from head to tail */
+void is_vbuffer(const void *buffer, unsigned size, void* esp, bool to_write);  /* check the buffer byte by byte from head to tail */
 void check_vaddr (const void *ptr);         /* check whether the address is valid user virtual address */
-void check_each_byte(const void* pointer);  /* check four bytes related to a pointer */
+void check_each_byte(const void* pointer, void* esp);  /* check four bytes related to a pointer */
 void check_string(const void* pointer);  /* check the string byte by byte from head to tail */
+
+/*my code*/
+struct spt_node* check_byte(const void* pointer, void* esp); // check byte and get page
+
 
 void
 syscall_init (void) 
@@ -40,10 +46,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   /* check validity of pointers and whether the pointer is valid mapped */
-  check_each_byte((int *)f->esp);
-  check_each_byte(((int *)f->esp)+1);
-  check_each_byte(((int *)f->esp)+2);
-  check_each_byte(((int *)f->esp)+3);
+  check_each_byte((int *)f->esp, f->esp);
+
 
   int syscall_num = *(int *)f->esp;
   
@@ -59,12 +63,14 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_EXIT:
     {
+      check_each_byte((int *)f->esp, f->esp+1);
       int status = *((int*)f->esp+1);
       Sys_exit(status);
       break;
     }
     case SYS_EXEC:
     {
+      check_each_byte((int *)f->esp, f->esp+1);
       const char* cmd_line = (char *)*((int*)f->esp+1);
       check_string(cmd_line);
       f->eax = Sys_exec(cmd_line);
@@ -72,12 +78,15 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_WAIT:
     {
+      check_each_byte((int *)f->esp, f->esp+1);
       pid_t pid =  *((int*)f->esp+1);
       f->eax = Sys_wait(pid);
       break;
     }
     case SYS_CREATE:
     {
+      check_each_byte((int *)f->esp, f->esp+1);
+      check_each_byte((int *)f->esp, f->esp+2);
       const char*file =(char *) *((int*)f->esp+1);
       is_mapped_vaddr(file);
       unsigned initial_size =  *((int*)f->esp+2);
@@ -86,6 +95,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_REMOVE:
     {
+      check_each_byte((int *)f->esp, f->esp+1);
       const char* file = (char *) *((int*)f->esp+1);
       is_mapped_vaddr(file);
       f->eax = Sys_remove(file);
@@ -93,6 +103,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_OPEN:
     {
+      check_each_byte((int *)f->esp, f->esp+1);
       const char* file = (char *)*((int*)f->esp+1);
       is_mapped_vaddr(file);
       f->eax = Sys_open(file);
@@ -100,30 +111,41 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_FILESIZE:
     {
+      check_each_byte((int *)f->esp, f->esp+1);
       int fd =  *((int*)f->esp+1);
       f->eax = Sys_filesize(fd);
       break;
     }
     case SYS_READ:
     {
+      check_each_byte((int *)f->esp, f->esp+1);
+      check_each_byte((int *)f->esp, f->esp+2);
+      check_each_byte((int *)f->esp, f->esp+3);
       int fd = *((int*)f->esp+1);
       void* buffer = (void *)*((int*)f->esp+2);
       unsigned size= *((int*)f->esp+3);
-      is_vbuffer(buffer,size);
+      // my code
+      is_vbuffer(buffer,size, f-esp, true);
       f->eax = Sys_read(fd, buffer, size);
       break;
     }
     case SYS_WRITE:
     {
+      check_each_byte((int *)f->esp, f->esp+1);
+      check_each_byte((int *)f->esp, f->esp+2);
+      check_each_byte((int *)f->esp, f->esp+3);
       int fd = *((int*)f->esp+1);
       const void* buffer = (void *)*((int *)f->esp+2);
       unsigned size = *((int *)f->esp+3);
-      is_vbuffer(buffer,size);
+      // my code
+      is_vbuffer(buffer,size, f->esp, false);
       f->eax = Sys_write(fd,buffer,size);
       break;
     }
     case SYS_SEEK:
     {
+      check_each_byte((int *)f->esp, f->esp+1);
+      check_each_byte((int *)f->esp, f->esp+2);
       int fd = *((int*)f->esp+1);
       unsigned position = *((int*)f->esp+2);
       Sys_seek(fd, position);
@@ -131,15 +153,31 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_TELL:
     {  
+      check_each_byte((int *)f->esp, f->esp+1);
       int fd = *((int*)f->esp+1);
       f->eax = Sys_tell(fd);
       break;
     }
     case SYS_CLOSE:
     { 
+      check_each_byte((int *)f->esp, f->esp+1);
       int fd = *((int*)f->esp+1);
       Sys_close(fd);
       break;
+    }
+    case SYS_MMAP:
+    {
+      check_each_byte((int *)f->esp, f->esp+1);
+      check_each_byte((int *)f->esp, f->esp+2);
+      int fd = *((int*)f->esp+1);
+      void *addr = (void *)*((int *)f->esp+2);
+      f->eax = Sys_mmap(fd,addr);
+    }
+    case SYS_MUNMAP:
+    {
+      check_each_byte((int *)f->esp, f->esp+1);
+      int mapid = *((int*)f->esp+1);
+      Sys_munmap(mapid);
     }
   }
 }
@@ -293,7 +331,7 @@ struct file* getFile(struct thread* t, int fd)
 
 void CloseFile(struct thread *t, int fd, bool All)
 {
-  if(All){
+  if(All){  
     while(!list_empty(&t->file_list)){
       struct file_node *node = list_entry(list_pop_front(&t->file_list), struct file_node,
             elem);
@@ -338,26 +376,35 @@ void is_mapped_vaddr(const void *addr)
   }
 }
 
-void is_vbuffer(const void *buffer, unsigned size)
+void is_vbuffer(const void *buffer, unsigned size, void* esp, bool to_write)
 {
   char *buf = (char *) buffer;
   for(unsigned i=0;i<size;i++)
   {
     check_vaddr((const void *) buf);
-    is_mapped_vaddr(buf);
+    // is_mapped_vaddr(buf);
+    struct spt_node* sptnode = check_byte((void*) buf,esp);
+    // check if page is writable
+    if (spt_node && to_write){
+      if (spt_node->writable) exit(-1);
+    }
     buf++;
   }
 }
 
-void check_each_byte(const void* pointer)
+// changed
+void check_each_byte(const void* pointer, void* esp)
 {
   unsigned char* pt = (unsigned char*) pointer;
   for (int i=0;i<4;i++)
   {
     check_vaddr((const void*) pt);
-    is_mapped_vaddr((const void*) pt);
+    // we could allocate page if there is no mapped_vaddr
+    // is_mapped_vaddr((const void*) pt);
+    check_byte((void*)pt);
     pt++;
   }
+  
 }
 
 void check_string(const void* pointer)
@@ -374,4 +421,141 @@ void check_string(const void* pointer)
 }
 
 
+struct spt_node* check_byte(const void* pointer, void* esp)
+{
+  check_vaddr((const void*) pointer);
+  bool isloaded = false;
+  struct spt_node* sptnode = get_spt_node((void*) pointer);
+  // if node is in table
+  if (sptnode){
+    // load page
+    load_page_from_file(sptnode);
+    // is_loaded
+    isloaded = spt_node->is_loaded;
+  }else if (pointer >= esp - 32){  // it can fault 32 bytes below the stack pointer.
+    isloaded = grow_stack((void*) pointer);
+  }
+  if (isloaded){
+    exit(-1);
+  }
+  return sptnode;
+}
 
+
+/* int here is equal to mapid_t */
+int
+Sys_mmap(int fd, void *addr)
+{
+  // printf("%s\n","-------begin mmap ----------------------");
+  // printf("addr %u\n",(unsigned)addr);
+
+
+
+  if (fd==0 || fd==1)
+    return -1;
+  if (!is_user_vaddr(addr) || addr < USER_VADDR_BASE || (unsigned int)addr % PGSIZE !=0)
+    return -1;
+
+  struct file* tmpfile = getFile(thread_current(),fd);
+  /* validity check ? */
+  if (!tmpfile)
+    return -1;
+  
+  // printf("%s\n","---here?----" );
+ 
+  int filesize = file_length(tmpfile);
+
+  struct file * file = file_reopen(tmpfile); 
+  if (filesize == 0)
+  {
+    // struct spt_node* sptnode = malloc(sizeof(struct spt_node));
+    //   if (!sptnode)
+    //     return -1;
+    //   sptnode->file = file;
+    //   sptnode->upage = addr;
+    //   sptnode->read_bytes = 0;
+    //   list_push_back(&thread_current()->spt,&sptnode->elem);
+    return -1;
+  }
+
+  
+
+  off_t ofs = 0;  
+  size_t read_bytes = filesize;
+  int mapid = ++thread_current()->mmap_counter;
+  while (read_bytes > 0 ) 
+    {
+      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+      /* check overlap mapping */
+      if (get_spt_node(addr))
+        return -1;
+
+      struct spt_node* sptnode = malloc(sizeof(struct spt_node));
+      if (!sptnode)
+        return -1;
+
+      sptnode->file = file;
+      sptnode->upage = addr;
+      sptnode->read_bytes = page_read_bytes;
+      sptnode->zero_bytes = page_zero_bytes;
+      sptnode->ofs = ofs;
+      sptnode->writable=true;
+      sptnode->mapid = mapid;
+      sptnode->is_mmap = true;
+      list_push_back(&thread_current()->spt,&sptnode->elem);
+
+
+      /* Advance. */
+      read_bytes -= page_read_bytes;
+      addr += PGSIZE;
+      ofs  += page_read_bytes;
+
+
+    }
+
+
+  // printf("-----finish---- mmap---- mapid %d\n" , mapid);
+
+
+  return mapid;
+}
+
+void 
+Sys_munmap(int mapid)
+{
+   
+  // printf("-----------------begin  unmap----------------  mapid : %d\n" , mapid);
+  struct thread * t = thread_current();
+  struct list_elem *e = list_begin(&t->spt);
+  while (e!=list_end(&t->spt)){
+      struct list_elem *tmp = e;
+      e=list_next(e);
+      struct spt_node * sptnode = list_entry(tmp,struct spt_node, elem);
+
+      
+
+      if((sptnode->is_mmap)&&(sptnode->mapid==mapid)){
+
+        // printf("--- the unmap address : %u\n",(unsigned)sptnode->upage);
+
+          if (pagedir_is_dirty(t->pagedir,sptnode->upage))
+          {
+            file_write_at(sptnode->file, sptnode->upage, sptnode->read_bytes, sptnode->ofs);
+          }
+          if (sptnode->loaded)
+          {
+            frame_remove(pagedir_get_page(t->pagedir, sptnode->upage));
+            pagedir_clear_page(t->pagedir, sptnode->upage);
+          }
+          
+
+
+
+          // file_close(sptnode->file);
+          list_remove(tmp);
+          free(sptnode);
+      }
+    }
+}

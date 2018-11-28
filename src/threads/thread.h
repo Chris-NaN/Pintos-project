@@ -129,7 +129,7 @@ struct thread
 
     /* proj3 */
     struct list spt;
-
+    int mmap_counter;
 
 
     /* Owned by thread.c. */

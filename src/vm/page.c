@@ -11,8 +11,8 @@
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
-
-
+#include "userprog/syscall.h"
+#include "userprog/pagedir.h"
 
 struct spt_node* get_spt_node(void* upage)
 {
@@ -30,6 +30,7 @@ struct spt_node* get_spt_node(void* upage)
   	return NULL;
 }
 
+/* delete *//////////////////////////////////////////////////////////////////////////////////////////////////
 bool spt_add_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
@@ -49,9 +50,6 @@ bool spt_add_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 
-
-
-
 bool load_page_from_file(struct spt_node * sptnode)
 {
 	/* Get a page of memory. */
@@ -61,12 +59,10 @@ bool load_page_from_file(struct spt_node * sptnode)
 
       /* Load this page, starting at offset FILE_OFS in the file.*/
 
-   // printf("-----------3.1-----");
-	/*   need to check kpage writable ???????????????????????? */
     if (file_read_at(sptnode->file, kpage, sptnode->read_bytes, sptnode->ofs) != (int)sptnode->read_bytes)
     {
     	// printf("-----------3.2-----");
-    	frame_remove(kpage);
+      	frame_remove(kpage);
         return false; 
     }
     memset (kpage + sptnode->read_bytes, 0, sptnode->zero_bytes);
@@ -74,12 +70,39 @@ bool load_page_from_file(struct spt_node * sptnode)
       /* Add the page to the process's address space. */
     if (!install_page (sptnode->upage, kpage, sptnode->writable)) 
     {
-    	// printf("-----------3.4-----");
+     // printf("-----------3.4-----");
         frame_remove(kpage);
         return false; 
     }
+    sptnode->loaded = true;
+
     return true;
 }
+
+void spt_destory(struct thread *t)
+{
+
+  while(!list_empty(&t->spt))
+      {
+        struct spt_node * sptnode = list_entry(list_pop_front(&t->spt), struct spt_node, elem);
+      
+      if(sptnode->is_mmap)
+      {
+          if (pagedir_is_dirty(t->pagedir,sptnode->upage))
+          {
+            file_write_at(sptnode->file, sptnode->upage, sptnode->read_bytes, sptnode->ofs);
+          }
+      }
+      if (sptnode->loaded)
+      {
+        frame_remove(pagedir_get_page(t->pagedir, sptnode->upage));
+        pagedir_clear_page(t->pagedir, sptnode->upage);
+      }
+      free(sptnode);
+      }
+
+}
+
 
 bool grow_stack (void *user_vaddr)
 {
@@ -102,7 +125,7 @@ bool grow_stack (void *user_vaddr)
     }
     if (!install_page (sptnode->upage, new_frame, sptnode->writable)) 
     {
-	free(sptnode);
+        free(sptnode);
         frame_remove(new_frame);
         return false; 
     }

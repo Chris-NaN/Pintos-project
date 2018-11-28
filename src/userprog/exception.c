@@ -94,7 +94,7 @@ kill (struct intr_frame *f)
       printf ("%s: dying due to interrupt %#04x (%s).\n",
               thread_name (), f->vec_no, intr_name (f->vec_no));
       intr_dump_frame (f);
-      thread_exit (); 
+      thread_exit ();
 
     case SEL_KCSEG:
       /* Kernel's code segment, which indicates a kernel bug.
@@ -158,31 +158,41 @@ page_fault (struct intr_frame *f)
   // /* proj2 */
   //  if the page fault was caused by user prog, and the fault address 
   //   should not be read or written by user prog , exit the process  
-  if ((user)&&(!is_user_vaddr(fault_addr) || fault_addr < USER_VADDR_BASE))
-    Err_exit(-1);
+  if ((user)&&(!is_user_vaddr(fault_addr) || fault_addr < USER_VADDR_BASE)){
+     // printf("%s\n","-------------1-------------------");
+    Err_exit(-1);}
   /* proj2 end*/
 
+    // printf("---------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^--------------\n");
+    // printf("-----user : %d\n",user);
+    // printf("-----not_present : %d\n",not_present);
+    // printf("%u\n",(unsigned int)fault_addr);
+
+
   /* proj3 */
-  if ((not_present) && is_user_vaddr(fault_addr) && fault_addr >= USER_VADDR_BASE )
+
+    // printf("%s\n","-------------0.5-------------------");
+  if (user)
   {
+    // printf("%s\n","-------------0.5-------------------");
+    if (not_present && is_user_vaddr(fault_addr) && fault_addr >= USER_VADDR_BASE )
+    {
     // printf("%s\n","-------------1-------------------");
-    struct spt_node * sptnode = get_spt_node(fault_addr);
+      struct spt_node * sptnode = get_spt_node(fault_addr);
     // printf("%s\n","-------------2-------------------");
     
 
-    if (!sptnode)
-    {
-      /* ??? */
-      // printf("-----------2.5-----------");
+      if (!sptnode)
+      {
+        Err_exit(-1);
+      }
+      if (load_page_from_file(sptnode))
+      {
+        return;
+      }
     }
-
-    if (load_page_from_file(sptnode))
-    {
-      // printf("%s\n","-------------3-------------------");
-      return;
-    }
+    Err_exit(-1);
   }
-
 
 
 

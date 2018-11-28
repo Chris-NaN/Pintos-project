@@ -200,6 +200,8 @@ thread_create (const char *name, int priority,
   list_push_back(&t->parent->child_list,&cnode->elem);
   
 
+
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -484,6 +486,11 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->child_list); 
   sema_init (&t->exec_wait, 0);  /* init exec_wait = 0 as semaphorm for sys_exec() */
   sema_init (&t->wait_sema, 0);  /* semaphorm of parent process waiting for child process finishing*/
+
+  /* proj3 */
+  t->mmap_counter=0;
+
+
 
 
   t->magic = THREAD_MAGIC;

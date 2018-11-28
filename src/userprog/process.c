@@ -258,6 +258,19 @@ process_exit (void)
         file_allow_write(cur->exec_file);
         file_close(cur->exec_file);
       }
+
+
+      /* free the memory of its child_list */
+      while(!list_empty(&cur->child_list))
+      {
+        struct child_node *node = list_entry(list_pop_front(&cur->child_list), struct child_node, elem);
+        free(node);
+      }
+
+      /* free the memory of the spt */
+      spt_destory(cur);
+
+
       /* free the memory of its file_list*/
        while(!list_empty(&cur->file_list))
       {
@@ -266,12 +279,8 @@ process_exit (void)
         free(nd);
       }
 
-      /* free the memory of its child_list */
-      while(!list_empty(&cur->child_list))
-      {
-        struct child_node *node = list_entry(list_pop_front(&cur->child_list), struct child_node, elem);
-        free(node);
-      }
+
+
 
       cnode = get_child_node(cur->parent,cur->tid);
       if (cnode)
@@ -588,8 +597,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         return false;
       sptnode->file = file;
       sptnode->upage = upage;
-      sptnode->read_bytes = read_bytes;
-      sptnode->zero_bytes = zero_bytes;
+      sptnode->read_bytes = page_read_bytes;
+      sptnode->zero_bytes = page_zero_bytes;
       sptnode->ofs = ofs;
       sptnode->writable = writable;
       list_push_back(&thread_current()->spt,&sptnode->elem);

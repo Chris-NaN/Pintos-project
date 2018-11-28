@@ -45,7 +45,7 @@ void * frame_allocate(enum palloc_flags flags)
 }
 
 void frame_remove(void* kpage)
-{
+{	
 	for (struct list_elem *e=list_begin(&frame_list);e!=list_end(&frame_list); 
 	  e = list_next(e)){
 		struct frame_node *fnode = list_entry(e, struct frame_node, elem);

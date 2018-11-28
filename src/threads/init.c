@@ -31,6 +31,11 @@
 #else
 #include "tests/threads/tests.h"
 #endif
+
+#ifdef VM
+#include "vm/frame.h"
+#endif
+
 #ifdef FILESYS
 #include "devices/block.h"
 #include "devices/ide.h"
@@ -114,6 +119,13 @@ main (void)
   exception_init ();
   syscall_init ();
 #endif
+
+/* proj3 : init the frame table */
+#ifdef VM
+  frame_table_init ();
+#endif
+
+
 
   /* Start thread scheduler and enable interrupts. */
   thread_start ();
