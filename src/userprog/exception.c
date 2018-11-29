@@ -168,10 +168,10 @@ page_fault (struct intr_frame *f)
   /* proj3 */
 
     // printf("%s\n","-------------0.5-------------------");
+  bool load = false;
   if (user)
   {
     // printf("%s\n","-------------0.5-------------------");
-    bool load = false;
     if (not_present && is_user_vaddr(fault_addr) && fault_addr >= USER_VADDR_BASE )
     {
     // printf("%s\n","-------------1-------------------");
@@ -185,26 +185,22 @@ page_fault (struct intr_frame *f)
         load = grow_stack(fault_addr);
       }
 
-      // if (load_page_from_file(sptnode))
-      // {
-      //   return;
-      // }
-     }
-     if (!load)
-     {
-       Err_exit(-1);
-     }else{
-       return;
      }
   }else{
     // pointer is in syscall
-    Err_exit(-1);
-    printf("------exceptioin-----");
+    //printf("------exceptioin-----");
     if(fault_addr >= thread_current()->stack_pointer)
+      load = grow_stack(fault_addr);
+    else
       Err_exit(-1);
-    //else:
       // invalid addr
       
+  }
+  if (!load)
+  {
+    Err_exit(-1);
+  }else{
+    return;
   }
 
 
