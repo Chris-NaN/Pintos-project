@@ -202,9 +202,6 @@ page_fault (struct intr_frame *f)
      }
   }else{
     // pointer is in syscall
-    printf("------edadasdsadasdasxceptioin-----11111111");
-
-
 
     if(fault_addr >= thread_current()->stack_pointer)
     {  
