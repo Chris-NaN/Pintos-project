@@ -4,12 +4,12 @@
 
 #include <list.h>
 #include "threads/thread.h"
-#include "vm/page.h"
 #include "threads/palloc.h"
-
-
+#include "threads/synch.h"
+#include "vm/page.h"
 /* the pointer for our swap algorithm */
-struct list_elem *swap_elem;
+struct frame_node *swap_pointer;
+struct lock frame_list_lock;
 
 struct frame_node
 {
@@ -28,7 +28,7 @@ struct frame_node
 
 
 void frame_table_init(void);
-void * frame_allocate(enum palloc_flags);
+void * frame_allocate(enum palloc_flags,struct spt_node * sptnode);
 void frame_remove(void* kpage);
 
 void * frame_swap(enum palloc_flags);

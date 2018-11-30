@@ -340,6 +340,7 @@ Sys_mmap(int fd, void *addr)
       sptnode->mapid = mapid;
       sptnode->is_mmap = true;
       sptnode->disk_index =0;
+      sptnode->locking = false;
       list_push_back(&thread_current()->spt,&sptnode->elem);
 
 
@@ -373,7 +374,7 @@ Sys_munmap(int mapid)
       if((sptnode->is_mmap)&&(sptnode->mapid==mapid)){
 
         // printf("--- the unmap address : %u\n",(unsigned)sptnode->upage);
-
+        sptnode->locking = true;
           if (pagedir_is_dirty(t->pagedir,sptnode->upage))
           {
             file_write_at(sptnode->file, sptnode->upage, sptnode->read_bytes, sptnode->ofs);

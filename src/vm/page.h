@@ -24,6 +24,9 @@ struct spt_node
 	bool is_mmap;
 	int mapid;
 
+
+	bool locking;
+
 	bool loaded; 
 
 	size_t disk_index;

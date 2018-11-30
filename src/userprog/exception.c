@@ -179,7 +179,11 @@ page_fault (struct intr_frame *f)
     // printf("%s\n","-------------2-------------------");
       
       if (sptnode){
+        // printf("%s\n","-------------------^****dsdsadasdsadasdasdasd");
+        sptnode->locking = true;
         load = load_page(sptnode);
+        sptnode->locking = false;
+
       }else if(fault_addr >= f->esp || (f->esp-fault_addr)==32|| (f->esp-fault_addr)==4){
         thread_current() -> stack_pointer = f->esp;
         load = grow_stack(fault_addr);
@@ -190,11 +194,14 @@ page_fault (struct intr_frame *f)
     // pointer is in syscall
     //printf("------exceptioin-----");
     if(fault_addr >= thread_current()->stack_pointer)
-      load = grow_stack(fault_addr);
+    {  
+        load = grow_stack(fault_addr);
+    }
     else
+    {
       Err_exit(-1);
       // invalid addr
-      
+     } 
   }
   if (!load)
   {

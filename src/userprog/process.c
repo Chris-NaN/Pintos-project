@@ -601,6 +601,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       sptnode->ofs = ofs;
       sptnode->writable = writable;
       sptnode->disk_index = 0;
+      sptnode->locking = false;
       list_push_back(&thread_current()->spt,&sptnode->elem);
 
       /* proj3 end*/

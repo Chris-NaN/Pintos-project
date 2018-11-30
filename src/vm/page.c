@@ -54,7 +54,7 @@ bool spt_add_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool load_page(struct spt_node * sptnode)
 {
 	/* Get a page of memory. */
-    uint8_t *kpage = frame_allocate(PAL_USER);
+    uint8_t *kpage = frame_allocate(PAL_USER,sptnode);
     
           /* swap */
     if (sptnode->disk_index)
@@ -125,7 +125,8 @@ bool grow_stack (void *user_vaddr)
     sptnode->disk_index = 0;
     sptnode->upage = pg_round_down(user_vaddr);
     sptnode->writable = true;
-    uint8_t* new_frame = frame_allocate(PAL_USER);
+    sptnode->locking = true;
+    uint8_t* new_frame = frame_allocate(PAL_USER,sptnode);
     if(new_frame==NULL){
         free(sptnode);
         return false;
@@ -138,6 +139,7 @@ bool grow_stack (void *user_vaddr)
     }
 
     list_push_back(&thread_current()->spt,&sptnode->elem);
+    sptnode->locking = false;
     return true;
     
     // have to deal with syscall and page fault pointer event
