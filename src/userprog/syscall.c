@@ -149,6 +149,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       int fd = *((int*)f->esp+1);
       void *addr = (void *)*((int *)f->esp+2);
+      if (addr+PGSIZE>f->esp)
+      {
+        f->eax=-1;
+        break;
+      }
       f->eax = Sys_mmap(fd,addr);
     }
     case SYS_MUNMAP:
@@ -300,7 +305,7 @@ Sys_mmap(int fd, void *addr)
 {
   if (fd==0 || fd==1)
     return -1;
-  if (!is_user_vaddr(addr) || addr < USER_VADDR_BASE || (unsigned int)addr % PGSIZE !=0)
+  if (!is_user_vaddr(addr) || addr < USER_VADDR_BASE || (unsigned int)addr % PGSIZE !=0 )
     return -1;
 
   struct file* tmpfile = getFile(thread_current(),fd);
@@ -325,6 +330,7 @@ Sys_mmap(int fd, void *addr)
       /* check overlap mapping */
       if (get_spt_node(addr))
         return -1;
+
 
 
       struct spt_node* sptnode = malloc(sizeof(struct spt_node));

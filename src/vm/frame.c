@@ -97,21 +97,6 @@ void * frame_swap(enum palloc_flags pallocflags)
 		struct thread * t = fnode->thread;
 	    struct spt_node * sptnode = fnode->sptnode;
 
-	 //    printf("%s\n","---------------------");
-	    
-
-
-		// printf(" read_bytes : %d\n",sptnode->read_bytes);
-		// printf(" zero_bytes : %d\n", sptnode->zero_bytes);
-	 //    printf(" the thread %d\n", t->tid);
-	 //    printf(" upage  : %u\n",(unsigned)sptnode->upage);
-	 //    printf(" mmap ? %d\n", sptnode->is_mmap);
-	 //    printf(" kpage ?%u\n",(unsigned)fnode->kpage);
-
-	 //    printf(" locked ? %d\n", sptnode->locking);
-
-	    // if (sptnode == NULL)
-	    	// printf("%s\n","SDSdadsadasdasdasdsadsad");
 
 	    if (sptnode->locking)
 	    {

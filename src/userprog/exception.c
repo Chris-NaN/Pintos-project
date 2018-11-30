@@ -180,6 +180,16 @@ page_fault (struct intr_frame *f)
       
       if (sptnode){
         // printf("%s\n","-------------------^****dsdsadasdsadasdasdasd");
+        
+        if(fault_addr >= f->esp || (f->esp-fault_addr)==32|| (f->esp-fault_addr)==4)
+        {
+          // printf("%s\n","++++++++++asdssadsaddasdasd-----------");
+        }
+        // printf("is_mmap  %u\n",sptnode->is_mmap);
+        // printf("addr %u\n",sptnode->upage);
+        // printf("file %u\n",sptnode->file);
+
+
         sptnode->locking = true;
         load = load_page(sptnode);
         sptnode->locking = false;
@@ -192,7 +202,10 @@ page_fault (struct intr_frame *f)
      }
   }else{
     // pointer is in syscall
-    //printf("------exceptioin-----");
+    printf("------edadasdsadasdasxceptioin-----11111111");
+
+
+
     if(fault_addr >= thread_current()->stack_pointer)
     {  
         load = grow_stack(fault_addr);
