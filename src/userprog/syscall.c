@@ -298,11 +298,6 @@ Sys_write(int fd, const void *buffer, unsigned size)
 int
 Sys_mmap(int fd, void *addr)
 {
-  // printf("%s\n","-------begin mmap ----------------------");
-  // printf("addr %u\n",(unsigned)addr);
-
-
-
   if (fd==0 || fd==1)
     return -1;
   if (!is_user_vaddr(addr) || addr < USER_VADDR_BASE || (unsigned int)addr % PGSIZE !=0)
@@ -312,26 +307,13 @@ Sys_mmap(int fd, void *addr)
   /* validity check ? */
   if (!tmpfile)
     return -1;
-  
-  // printf("%s\n","---here?----" );
  
   int filesize = file_length(tmpfile);
-
   struct file * file = file_reopen(tmpfile); 
   if (filesize == 0)
   {
-    // struct spt_node* sptnode = malloc(sizeof(struct spt_node));
-    //   if (!sptnode)
-    //     return -1;
-    //   sptnode->file = file;
-    //   sptnode->upage = addr;
-    //   sptnode->read_bytes = 0;
-    //   list_push_back(&thread_current()->spt,&sptnode->elem);
     return -1;
   }
-
-  
-
   off_t ofs = 0;  
   size_t read_bytes = filesize;
   int mapid = ++thread_current()->mmap_counter;
@@ -357,6 +339,7 @@ Sys_mmap(int fd, void *addr)
       sptnode->writable=true;
       sptnode->mapid = mapid;
       sptnode->is_mmap = true;
+      sptnode->disk_index =0;
       list_push_back(&thread_current()->spt,&sptnode->elem);
 
 
@@ -364,8 +347,6 @@ Sys_mmap(int fd, void *addr)
       read_bytes -= page_read_bytes;
       addr += PGSIZE;
       ofs  += page_read_bytes;
-
-
     }
 
 

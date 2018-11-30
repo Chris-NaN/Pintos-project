@@ -8,6 +8,9 @@
 #include "threads/palloc.h"
 
 
+/* the pointer for our swap algorithm */
+struct list_elem *swap_elem;
+
 struct frame_node
 {
 	
@@ -28,7 +31,7 @@ void frame_table_init(void);
 void * frame_allocate(enum palloc_flags);
 void frame_remove(void* kpage);
 
-
+void * frame_swap(enum palloc_flags);
 
 
 

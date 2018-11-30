@@ -179,7 +179,7 @@ page_fault (struct intr_frame *f)
     // printf("%s\n","-------------2-------------------");
       
       if (sptnode){
-        load = load_page_from_file(sptnode);
+        load = load_page(sptnode);
       }else if(fault_addr >= f->esp || (f->esp-fault_addr)==32|| (f->esp-fault_addr)==4){
         thread_current() -> stack_pointer = f->esp;
         load = grow_stack(fault_addr);
@@ -207,14 +207,14 @@ page_fault (struct intr_frame *f)
 
 
 
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+  // /* To implement virtual memory, delete the rest of the function
+  //    body, and replace it with code that brings in the page to
+  //    which fault_addr refers. */
+  // printf ("Page fault at %p: %s error %s page in %s context.\n",
+  //         fault_addr,
+  //         not_present ? "not present" : "rights violation",
+  //         write ? "writing" : "reading",
+  //         user ? "user" : "kernel");
+  // kill (f);
 }
 

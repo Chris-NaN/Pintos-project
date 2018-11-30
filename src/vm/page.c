@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "vm/frame.h"
+#include "vm/swap.h"
 #include "filesys/file.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
@@ -50,23 +51,27 @@ bool spt_add_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 
-bool load_page_from_file(struct spt_node * sptnode)
+bool load_page(struct spt_node * sptnode)
 {
 	/* Get a page of memory. */
     uint8_t *kpage = frame_allocate(PAL_USER);
-    if (kpage == NULL)
-    	{/* ??????? */}
-
-      /* Load this page, starting at offset FILE_OFS in the file.*/
-
-    if (file_read_at(sptnode->file, kpage, sptnode->read_bytes, sptnode->ofs) != (int)sptnode->read_bytes)
+    
+          /* swap */
+    if (sptnode->disk_index)
     {
-    	// printf("-----------3.2-----");
-      	frame_remove(kpage);
-        return false; 
+      get_from_disk(sptnode->disk_index,kpage);
     }
-    memset (kpage + sptnode->read_bytes, 0, sptnode->zero_bytes);
-    // printf("-----------3.3-----");
+    else 
+    {      
+      /* Load this page, starting at offset FILE_OFS in the file.*/
+      if (file_read_at(sptnode->file, kpage, sptnode->read_bytes, sptnode->ofs) != (int)sptnode->read_bytes)
+      {
+      // printf("-----------3.2-----");
+        frame_remove(kpage);
+        return false; 
+      }
+      memset (kpage + sptnode->read_bytes, 0, sptnode->zero_bytes);
+    }
       /* Add the page to the process's address space. */
     if (!install_page (sptnode->upage, kpage, sptnode->writable)) 
     {
@@ -116,6 +121,8 @@ bool grow_stack (void *user_vaddr)
         return false;
     }
     // no complete
+
+    sptnode->disk_index = 0;
     sptnode->upage = pg_round_down(user_vaddr);
     sptnode->writable = true;
     uint8_t* new_frame = frame_allocate(PAL_USER);

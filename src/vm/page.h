@@ -22,10 +22,12 @@ struct spt_node
 	bool writable;
 
 	bool is_mmap;
-	
+	int mapid;
+
 	bool loaded; 
 
-	int mapid;
+	size_t disk_index;
+	
 
 	struct list_elem elem;
 };
@@ -36,7 +38,7 @@ struct spt_node* get_spt_node(void* user_vaddr);
 bool spt_add_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 
-bool load_page_from_file(struct spt_node * sptnode);
+bool load_page(struct spt_node * sptnode);
 
 void spt_destory(struct thread *t);
 
