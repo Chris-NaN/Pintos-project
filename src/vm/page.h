@@ -14,8 +14,8 @@
 struct spt_node
 {
 
-	uint8_t * upage; 
-	struct file * file;
+	uint8_t * upage;        /* the page address of user virtual memory */
+	struct file * file;     
 	off_t ofs;  /* offset */
 	size_t read_bytes;
 	size_t zero_bytes;
@@ -24,9 +24,7 @@ struct spt_node
 	bool is_mmap;
 	int mapid;
 
-
 	bool locking;
-
 	bool loaded; 
 
 	size_t disk_index;
