@@ -24,15 +24,18 @@ void swap_init(void)
 size_t swap_into_disk(void* frame)
 {
     // write to target section address in block
+    lock_acquire(&swap_lock);
     size_t tar_addr = bitmap_scan_and_flip(swap_table, 0, 1, FREE);
     for (uint32_t i=0;i<SECTORS_PER_PAGE;i++){
         block_write(swap_block, tar_addr*SECTORS_PER_PAGE+i, (uint8_t*)frame+i*BLOCK_SECTOR_SIZE);
     }
+    lock_release(&swap_lock);
     return tar_addr;
 }
 
 void get_from_disk(size_t idx, void* upage)
 {
+    lock_acquire(&swap_lock);
     bitmap_flip(swap_table, idx);
 
     for (size_t i = 0; i < SECTORS_PER_PAGE; i++)
@@ -40,6 +43,7 @@ void get_from_disk(size_t idx, void* upage)
         block_read(swap_block, idx * SECTORS_PER_PAGE + i,
         (uint8_t *) upage + i * BLOCK_SECTOR_SIZE);
     }
+    lock_release(&swap_lock);
 }
 
 
