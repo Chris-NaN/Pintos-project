@@ -21,10 +21,13 @@
 
 
 static void syscall_handler (struct intr_frame *);
+static int get_user (const uint8_t *uaddr);
+static bool put_user (uint8_t *udst, uint8_t byte);
 static struct file* getFile(struct thread* t, int fd);
 void CloseFile(struct thread *t, int fd, bool All);
+void is_writable_vaddr(const void *addr);
 void is_mapped_vaddr(const void *addr);       /* check whether the user virtual address is valid mapped to the physical address*/
-void is_vbuffer(const void *buffer, unsigned size);  /* check the buffer byte by byte from head to tail */
+void is_vbuffer(const void *buffer, unsigned size, int syscall_num);  /* check the buffer byte by byte from head to tail */
 void check_vaddr (const void *ptr);         /* check whether the address is valid user virtual address */
 void check_each_byte(const void* pointer);  /* check four bytes related to a pointer */
 void check_string(const void* pointer);  /* check the string byte by byte from head to tail */
@@ -113,7 +116,10 @@ syscall_handler (struct intr_frame *f UNUSED)
       int fd = *((int*)f->esp+1);
       void* buffer = (void *)*((int*)f->esp+2);
       unsigned size= *((int*)f->esp+3);
-      is_vbuffer(buffer,size);
+
+      // printf("%s\n","------1-------");
+      is_vbuffer(buffer,size,syscall_num);
+      // printf("%s\n","------2-------");
       f->eax = Sys_read(fd, buffer, size);
       break;
     }
@@ -122,7 +128,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       int fd = *((int*)f->esp+1);
       const void* buffer = (void *)*((int *)f->esp+2);
       unsigned size = *((int *)f->esp+3);
-      is_vbuffer(buffer,size);
+      is_vbuffer(buffer,size,syscall_num);
       f->eax = Sys_write(fd,buffer,size);
       break;
     }
@@ -149,6 +155,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       int fd = *((int*)f->esp+1);
       void *addr = (void *)*((int *)f->esp+2);
+      /* can't mmap over the stack segment  */
       if (addr+PGSIZE>f->esp)
       {
         f->eax=-1;
@@ -401,6 +408,33 @@ Sys_munmap(int mapid)
     }
 }
 
+/* Reads a byte at user virtual address UADDR.
+UADDR must be below PHYS_BASE.
+Returns the byte value if successful, -1 if a segfault
+occurred. */
+static int
+get_user (const uint8_t *uaddr)
+{
+int result;
+asm ("movl $1f, %0; movzbl %1, %0; 1:"
+: "=&a" (result) : "m" (*uaddr));
+return result;
+}
+
+
+/* Writes BYTE to user address UDST.
+UDST must be below PHYS_BASE.
+Returns true if successful, false if a segfault occurred. */
+static bool
+put_user (uint8_t *udst, uint8_t byte)
+{
+int error_code;
+asm ("movl $1f, %0; movb %b2, %1; 1:"
+: "=&a" (error_code), "=m" (*udst) : "q" (byte));
+return error_code != -1;
+}
+
+
 
 struct file* getFile(struct thread* t, int fd)
 {
@@ -450,6 +484,11 @@ Err_exit(int status)
   thread_exit();
 }
 
+
+
+
+
+
 void check_vaddr (const void *ptr)
 {
   if(!is_user_vaddr(ptr) || ptr < USER_VADDR_BASE)
@@ -460,21 +499,56 @@ void is_mapped_vaddr(const void *addr)
 {
   if (is_user_vaddr(addr))
   {
-    void *ptr = pagedir_get_page(thread_current()->pagedir, addr);
-    if(!ptr)
+    if(get_user(addr)==-1)
       Err_exit(-1);
   }
 }
 
-void is_vbuffer(const void *buffer, unsigned size)
+
+void is_writable_vaddr(const void *addr)
 {
-  char *buf = (char *) buffer;
-  for(unsigned i=0;i<size;i++)
+ if(get_user(addr)==-1)
+      Err_exit(-1);
+if (!put_user ((uint8_t *)addr, get_user(addr)))
+      Err_exit(-1);
+}
+
+void is_vbuffer(const void *buffer, unsigned size , int syscall_num)
+{
+  switch(syscall_num)
   {
-    check_vaddr((const void *) buf);
-    is_mapped_vaddr(buf);
-    buf++;
+    case SYS_READ:
+    {
+     char *buf = (char *) buffer;
+     // is_writable_vaddr(buf);
+     // printf("size is : %u\n",size);
+
+      for(unsigned i=0;i<size;i++)
+      {
+        check_vaddr((const void *) buf);
+        
+        // printf("%s\n","--1");
+        // printf("%u\n",(unsigned)buf);
+        is_writable_vaddr(buf);
+        // is_mapped_vaddr(buf);
+        // printf("%s\n","--2");
+        buf++;
+      }
+    }
+    case SYS_WRITE:
+    {
+      char *buf = (char *) buffer;
+      for(unsigned i=0;i<size;i++)
+      {
+        check_vaddr((const void *) buf);
+        is_mapped_vaddr(buf);
+        // is_writable_vaddr(buf,esp);
+        buf++;
+      }
+    }
   }
+
+
 }
 
 void check_each_byte(const void* pointer)
@@ -491,8 +565,8 @@ void check_each_byte(const void* pointer)
 
 void check_string(const void* pointer)
 {
-  char* pt = (char*) pointer;
-  while(pagedir_get_page(thread_current()->pagedir,(void *)pt))
+    char* pt = (char*) pointer;
+  while(get_user(pointer)!=-1)
   {
     check_vaddr((const void*) pt);
     if (*pt == '\0')
@@ -500,6 +574,15 @@ void check_string(const void* pointer)
     pt++;
   }
   Err_exit(-1);
+  // char* pt = (char*) pointer;
+  // while(pagedir_get_page(thread_current()->pagedir,(void *)pt))
+  // {
+  //   check_vaddr((const void*) pt);
+  //   if (*pt == '\0')
+  //     return;
+  //   pt++;
+  // }
+  // Err_exit(-1);
 }
 
 

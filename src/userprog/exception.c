@@ -167,7 +167,9 @@ page_fault (struct intr_frame *f)
 
   /* proj3 */
 
-    // printf("%s\n","-------------0.5-------------------");
+    // printf("%s\n","-------------begin load-------------------");
+    // printf("-----user : %d\n",user);
+    // printf("%u\n",(unsigned int)fault_addr);
   bool load = false;
   if (user)
   {
@@ -179,20 +181,17 @@ page_fault (struct intr_frame *f)
     // printf("%s\n","-------------2-------------------");
       
       if (sptnode){
-        // printf("%s\n","-------------------^****dsdsadasdsadasdasdasd");
-        
-        if(fault_addr >= f->esp || (f->esp-fault_addr)==32|| (f->esp-fault_addr)==4)
-        {
-          // printf("%s\n","++++++++++asdssadsaddasdasd-----------");
-        }
         // printf("is_mmap  %u\n",sptnode->is_mmap);
-        // printf("addr %u\n",sptnode->upage);
+        // printf("addr          : %u\n",sptnode->upage);
+
+        // printf("addr + PGSIZE : %u\n", sptnode->upage + PGSIZE);
         // printf("file %u\n",sptnode->file);
-
-
         sptnode->locking = true;
         load = load_page(sptnode);
         sptnode->locking = false;
+
+        
+
 
       }else if(fault_addr >= f->esp || (f->esp-fault_addr)==32|| (f->esp-fault_addr)==4){
         thread_current() -> stack_pointer = f->esp;
@@ -201,21 +200,28 @@ page_fault (struct intr_frame *f)
 
      }
   }else{
-    // pointer is in syscall
-    printf("------edadasdsadasdasxceptioin-----11111111");
 
 
+/* 11 30 wan */
+     struct spt_node * sptnode = get_spt_node(fault_addr);
+      if (sptnode){
+        sptnode->locking = true;
+        load = load_page(sptnode);
+        sptnode->locking = false;
+      }
 
-    if(fault_addr >= thread_current()->stack_pointer)
+      else if(fault_addr >= thread_current()->stack_pointer)
     {  
         load = grow_stack(fault_addr);
     }
     else
     {
-      Err_exit(-1);
+      load = false;
       // invalid addr
      } 
   }
+  // printf(" load ??? %d\n",load);
+
   if (!load)
   {
     Err_exit(-1);
