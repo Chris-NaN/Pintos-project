@@ -31,7 +31,7 @@ void frame_table_init(void);
 void * frame_allocate(enum palloc_flags,struct spt_node * sptnode);
 void frame_remove(void* kpage);
 
-void * frame_swap(enum palloc_flags);
+void * frame_swap(enum palloc_flags,struct spt_node* newsptnode);
 
 
 

@@ -186,6 +186,9 @@ page_fault (struct intr_frame *f)
 
         // printf("addr + PGSIZE : %u\n", sptnode->upage + PGSIZE);
         // printf("file %u\n",sptnode->file);
+        // printf("readbytes     : %u\n", sptnode->read_bytes);
+        // printf("zerobytes     : %u\n",sptnode->zero_bytes);
+
         sptnode->locking = true;
         load = load_page(sptnode);
         sptnode->locking = false;
@@ -194,6 +197,8 @@ page_fault (struct intr_frame *f)
 
 
       }else if(fault_addr >= f->esp || (f->esp-fault_addr)==32|| (f->esp-fault_addr)==4){
+       
+        // printf("%s\n","----here?---------3");
         thread_current() -> stack_pointer = f->esp;
         load = grow_stack(fault_addr);
       }
@@ -220,7 +225,7 @@ page_fault (struct intr_frame *f)
       // invalid addr
      } 
   }
-  // printf(" load ??? %d\n",load);
+  // printf("=========================== load success ??? %d\n\n",load);
 
   if (!load)
   {

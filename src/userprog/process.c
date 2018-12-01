@@ -405,7 +405,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  lock_acquire(&filesys_lock);
+  
   file = filesys_open (file_name);
+  
+  lock_release(&filesys_lock);
+  
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -602,6 +608,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       sptnode->writable = writable;
       sptnode->disk_index = 0;
       sptnode->locking = false;
+      sptnode->is_mmap = false;
       list_push_back(&thread_current()->spt,&sptnode->elem);
 
       /* proj3 end*/

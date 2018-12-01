@@ -31,26 +31,6 @@ struct spt_node* get_spt_node(void* upage)
   	return NULL;
 }
 
-/* delete *//////////////////////////////////////////////////////////////////////////////////////////////////
-bool spt_add_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
-{
-	  struct spt_node* sptnode = malloc(sizeof(struct spt_node));
-      /* ??? */
-      if (!sptnode)
-        return false;
-      /* ??? end */
-      sptnode->file = file;
-      sptnode->upage = upage;
-      sptnode->read_bytes = read_bytes;
-      sptnode->zero_bytes = zero_bytes;
-      sptnode->ofs = ofs;
-      sptnode->writable = writable;
-      list_push_back(&thread_current()->spt,&sptnode->elem);
-      return true;
-}
-
-
 bool load_page(struct spt_node * sptnode)
 {
 	/* Get a page of memory. */
@@ -126,6 +106,7 @@ bool grow_stack (void *user_vaddr)
     sptnode->upage = pg_round_down(user_vaddr);
     sptnode->writable = true;
     sptnode->locking = true;
+    sptnode->is_mmap = false;
     uint8_t* new_frame = frame_allocate(PAL_USER,sptnode);
     if(new_frame==NULL){
         free(sptnode);

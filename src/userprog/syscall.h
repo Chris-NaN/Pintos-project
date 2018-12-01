@@ -4,6 +4,9 @@
 #include <debug.h>
 #include "userprog/process.h"
 
+#include "threads/synch.h"
+
+
 typedef int pid_t;
 
 struct file_node
@@ -12,6 +15,10 @@ struct file_node
   int fd;
   struct list_elem elem;
 };
+
+/* 12.1 */
+struct lock filesys_lock;
+/* 12.1 */
 
 void syscall_init (void);
 

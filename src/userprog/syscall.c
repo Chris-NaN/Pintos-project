@@ -36,6 +36,7 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  lock_init(&filesys_lock);
 }
 
 static void
@@ -53,6 +54,9 @@ syscall_handler (struct intr_frame *f UNUSED)
   check_each_byte(((int *)f->esp)+3);
 
   int syscall_num = *(int *)f->esp;
+
+
+  // printf("----------------------------------------------------- begin syscall with num [ %d ]\n",syscall_num);
   
   if(syscall_num <0 || syscall_num > 20 ){
     Err_exit(-1);  
@@ -86,29 +90,68 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_CREATE:
     {
       const char*file =(char *) *((int*)f->esp+1);
+
+
       is_mapped_vaddr(file);
+      // check_string(file);
+
+
       unsigned initial_size =  *((int*)f->esp+2);
+
+
+      lock_acquire(&filesys_lock);
       f->eax = Sys_create(file,initial_size);
+      lock_release(&filesys_lock);
+
+
+
+      // printf("create ??? %d\n",f->eax);
+
+
       break;
     }
     case SYS_REMOVE:
     {
       const char* file = (char *) *((int*)f->esp+1);
       is_mapped_vaddr(file);
+
+      lock_acquire(&filesys_lock);
       f->eax = Sys_remove(file);
+      lock_release(&filesys_lock);
+      
       break;
     }
     case SYS_OPEN:
     {
       const char* file = (char *)*((int*)f->esp+1);
-      is_mapped_vaddr(file);
+      /* origin */
+      // printf("%s\n","begin OPEN  ----1 ----");
+
+      // is_mapped_vaddr(file);
+
+      // printf("%s\n","begin OPEN  ----2 ----");
+      /* origin */
+
+      /* 2018.12.1 */
+      check_string(file);
+      /* 2018.12.1 */
+      // printf("%s\n","begin OPEN  ----3 ----");
+
       f->eax = Sys_open(file);
+      // printf("%s\n","begin OPEN  ----4 ----");
+
+      
+
       break;
     }
     case SYS_FILESIZE:
     {
       int fd =  *((int*)f->esp+1);
+      
+      // lock_acquire(&filesys_lock);
       f->eax = Sys_filesize(fd);
+      // lock_release(&filesys_lock);
+      
       break;
     }
     case SYS_READ:
@@ -116,10 +159,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       int fd = *((int*)f->esp+1);
       void* buffer = (void *)*((int*)f->esp+2);
       unsigned size= *((int*)f->esp+3);
-
-      // printf("%s\n","------1-------");
       is_vbuffer(buffer,size,syscall_num);
-      // printf("%s\n","------2-------");
       f->eax = Sys_read(fd, buffer, size);
       break;
     }
@@ -221,11 +261,26 @@ Sys_remove(const char* file)
 int
 Sys_open(const char*file)
 {
+  
+  // printf("-----------------------into sys_open ------------------\n");
+ 
+  lock_acquire(&filesys_lock);
   struct file *f = filesys_open(file);
+  lock_release(&filesys_lock);
   struct thread *t = thread_current();
+
+  // printf("-----------------------into 2 ------------------\n");
+  // printf("file name : %s\n",file);
+  // printf("where is file : %u\n",(unsigned)f);
+  
+
   // return -1 if open file fail
   if(!f)
+  {
     return -1;
+  }
+
+  // printf("-----------------------into 3 ------------------\n");
   // add file to process file_list and change file discriptor
   struct file_node *node = malloc(sizeof(struct file_node));
   // have to do free operation later, or it will occur mem leak
@@ -234,6 +289,11 @@ Sys_open(const char*file)
   t->fd++;
   // push node into thread's file_list
   list_push_back(&t->file_list, &node->elem);
+
+
+  // printf("-----------------------node-> fd***------------------%d\n",node->fd);
+
+
   return node->fd;  // return a nonnegative int called "file discriptor"
 }
 int
@@ -259,7 +319,10 @@ Sys_read(int fd, void *buffer, unsigned length)
     struct file *f = getFile(thread_current(),fd);
     if(!f)
       return -1;
+
+    // lock_acquire(&filesys_lock);
     int bytes = file_read(f,buffer,length);
+    // lock_release(&filesys_lock);
     return bytes;
   }
 
@@ -270,7 +333,9 @@ Sys_seek(int fd, unsigned position)
   struct file *f = getFile(thread_current(),fd);
   if(!f)
     return;
+  // lock_acquire(&filesys_lock);
   file_seek(f,position);
+  // lock_release(&filesys_lock);
 }
 
 unsigned 
@@ -285,7 +350,9 @@ Sys_tell (int fd)
 void
 Sys_close(int fd)
 {
+  // lock_acquire(&filesys_lock);
   CloseFile(thread_current(), fd, false);
+  // lock_release(&filesys_lock);
 }
 
 int
@@ -301,7 +368,9 @@ Sys_write(int fd, const void *buffer, unsigned size)
   if(f==NULL){
     Err_exit(-1);   // return 0 if no bytes could be written at all
   }
+  // lock_acquire(&filesys_lock);
   bytes = file_write(f,buffer,size);
+  // lock_release(&filesys_lock);
   return bytes;
 
 }
@@ -320,8 +389,11 @@ Sys_mmap(int fd, void *addr)
   if (!tmpfile)
     return -1;
  
+  // lock_acquire(&filesys_lock);
   int filesize = file_length(tmpfile);
   struct file * file = file_reopen(tmpfile); 
+  // lock_release(&filesys_lock);
+
   if (filesize == 0)
   {
     return -1;
@@ -388,9 +460,9 @@ Sys_munmap(int mapid)
 
         // printf("--- the unmap address : %u\n",(unsigned)sptnode->upage);
         sptnode->locking = true;
-          if (pagedir_is_dirty(t->pagedir,sptnode->upage))
+          if (pagedir_is_dirty(t->pagedir,sptnode->upage)&&(sptnode->file))
           {
-            file_write_at(sptnode->file, sptnode->upage, sptnode->read_bytes, sptnode->ofs);
+              file_write_at(sptnode->file, sptnode->upage, sptnode->read_bytes, sptnode->ofs);
           }
           if (sptnode->loaded)
           {
@@ -398,10 +470,7 @@ Sys_munmap(int mapid)
             pagedir_clear_page(t->pagedir, sptnode->upage);
           }
           
-
-
-
-          // file_close(sptnode->file);
+          file_close(sptnode->file);
           list_remove(tmp);
           free(sptnode);
       }

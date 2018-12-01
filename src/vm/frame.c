@@ -32,12 +32,7 @@ void * frame_allocate(enum palloc_flags flags,struct spt_node * sptnode)
 		void* kpage = palloc_get_page(PAL_USER);
 
 		if (!kpage)
-		{
-			lock_acquire(&frame_list_lock);
-			kpage = frame_swap(PAL_USER);
-			lock_release(&frame_list_lock);
-			// printf("%s\n","----------****1111111111222222");
-		}
+			return frame_swap(PAL_USER,sptnode);
 		// printf("%s\n","----------init---1--");
 		struct frame_node* fnode = malloc(sizeof(struct frame_node));
 		// printf("%s\n","----------init---1.5--");
@@ -73,8 +68,9 @@ void frame_remove(void* kpage)
 	lock_release(&frame_list_lock);
 }
 
-void * frame_swap(enum palloc_flags pallocflags)
+void * frame_swap(enum palloc_flags pallocflags,struct spt_node* newsptnode)
 {
+	lock_acquire(&frame_list_lock);
 	struct list_elem * e;
 	if (swap_pointer == NULL)
 	{
@@ -84,10 +80,6 @@ void * frame_swap(enum palloc_flags pallocflags)
 	{
 		e = &swap_pointer->elem;
 	}
-
-
-	// printf("  ******* ----    size of  frame_list %d\n",list_size(&frame_list));
-	// return 0;
 
 	while(true)
 	{
@@ -124,8 +116,8 @@ void * frame_swap(enum palloc_flags pallocflags)
 	   		if (sptnode->is_mmap)
 	   		{
 	   			// printf("%s\n","------------------5-----------------------");
-	   			if (pagedir_is_dirty(t->pagedir,sptnode->upage))
-	   			{
+	   			if (pagedir_is_dirty(t->pagedir,sptnode->upage)&&(sptnode->file))
+	   			{	
 	   				file_write_at(sptnode->file, sptnode->upage, sptnode->read_bytes, sptnode->ofs);
 	   			}
 	   			// printf("%s\n","------------------6-----------------------");
@@ -142,25 +134,15 @@ void * frame_swap(enum palloc_flags pallocflags)
 	   		palloc_free_page(fnode->kpage);
 	   		
 	   	}
-	   	// printf("%s\n","------------------10-----------------------");
-		
-
-		// struct list_elem* next_e = e == list_end(&frame_list)? list_begin(&frame_list): list_next(e);
+	   
 		struct list_elem* next_e = list_next(e) == list_end(&frame_list)? list_begin(&frame_list): list_next(e);
 		swap_pointer = list_entry(next_e, struct frame_node, elem);
-		// printf("%s\n","----------******************dadsadsad***----------");
-		// printf("%s\n","------------------11-----------------------");
-		// lock_acquire(&frame_list_lock);
-		list_remove(e);
-		// lock_release(&frame_list_lock);
-		// printf("%s\n","------------------12-----------------------");
-		// printf("%s\n","----------****111111111111111111111111111111111***----------");
-    	// debug_backtrace_all();
-    	free(fnode);
-
-    	// debug_backtrace_all();
-        // printf("%s\n","----------****1111111111222222222222222222222222221111111***----------");
-    	return palloc_get_page(pallocflags);
+		
+		fnode->kpage = palloc_get_page(pallocflags);
+    	fnode->sptnode = newsptnode;
+    	fnode->thread = thread_current();
+    	lock_release(&frame_list_lock);
+    	return fnode->kpage;
 	}
 }
 

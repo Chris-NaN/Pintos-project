@@ -38,9 +38,6 @@ struct spt_node
 
 struct spt_node* get_spt_node(void* user_vaddr);
 
-bool spt_add_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable);
-
 bool load_page(struct spt_node * sptnode);
 
 void spt_destory(struct thread *t);
