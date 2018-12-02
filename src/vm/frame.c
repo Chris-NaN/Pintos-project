@@ -116,7 +116,7 @@ void * frame_swap(enum palloc_flags pallocflags,struct spt_node* newsptnode)
 	   		if (sptnode->is_mmap)
 	   		{
 	   			// printf("%s\n","------------------5-----------------------");
-	   			if (pagedir_is_dirty(t->pagedir,sptnode->upage)&&(sptnode->file))
+	   			if (pagedir_is_dirty(t->pagedir,sptnode->upage))
 	   			{	
 	   				file_write_at(sptnode->file, sptnode->upage, sptnode->read_bytes, sptnode->ofs);
 	   			}

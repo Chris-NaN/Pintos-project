@@ -411,37 +411,32 @@ Sys_mmap(int fd, void *addr)
 void 
 Sys_munmap(int mapid)
 {
-   
-  // printf("-----------------begin  unmap----------------  mapid : %d\n" , mapid);
   struct thread * t = thread_current();
   struct list_elem *e = list_begin(&t->spt);
-  while (e!=list_end(&t->spt)){
+  while (e!=list_end(&t->spt))
+  {
       struct list_elem *tmp = e;
       e=list_next(e);
       struct spt_node * sptnode = list_entry(tmp,struct spt_node, elem);
-
-      
-
+    
       if((sptnode->is_mmap)&&(sptnode->mapid==mapid)){
-
-        // printf("--- the unmap address : %u\n",(unsigned)sptnode->upage);
-        sptnode->locking = true;
-          if (pagedir_is_dirty(t->pagedir,sptnode->upage)&&(sptnode->file))
-          {
-              file_write_at(sptnode->file, sptnode->upage, sptnode->read_bytes, sptnode->ofs);
-          }
+          sptnode->locking = true;
           if (sptnode->loaded)
           {
+            if (pagedir_is_dirty(t->pagedir,sptnode->upage)&&(sptnode->file))
+            {
+              file_write_at(sptnode->file, sptnode->upage, sptnode->read_bytes, sptnode->ofs);
+            }
             frame_remove(pagedir_get_page(t->pagedir, sptnode->upage));
             pagedir_clear_page(t->pagedir, sptnode->upage);
           }
-          
           file_close(sptnode->file);
           list_remove(tmp);
           free(sptnode);
       }
     }
 }
+
 
 /* Reads a byte at user virtual address UADDR.
 UADDR must be below PHYS_BASE.
