@@ -199,7 +199,7 @@ pid_t
 Sys_exec(const char* cmd_line)
 {
   if (!cmd_line)
-  	return -1;
+    return -1;
   pid_t pid = process_execute(cmd_line);
   return pid;
 }
@@ -419,14 +419,30 @@ Sys_munmap(int mapid)
       e=list_next(e);
       struct spt_node * sptnode = list_entry(tmp,struct spt_node, elem);
     
-      if((sptnode->is_mmap)&&(sptnode->mapid==mapid)){
+      // if((sptnode->is_mmap)&&(sptnode->mapid==mapid)){
+      //     sptnode->locking = true;
+      //     if (sptnode->loaded)
+      //     {
+      //       if (pagedir_is_dirty(t->pagedir,sptnode->upage)&&(sptnode->file))
+      //       {
+      //         file_write_at(sptnode->file, sptnode->upage, sptnode->read_bytes, sptnode->ofs);
+      //       }
+      //       frame_remove(pagedir_get_page(t->pagedir, sptnode->upage));
+      //       pagedir_clear_page(t->pagedir, sptnode->upage);
+      //     }
+      //     file_close(sptnode->file);
+      //     list_remove(tmp);
+      //     free(sptnode);
+      // }
+          if((sptnode->is_mmap)&&(sptnode->mapid==mapid)){
           sptnode->locking = true;
-          if (sptnode->loaded)
-          {
-            if (pagedir_is_dirty(t->pagedir,sptnode->upage)&&(sptnode->file))
+          
+          if (pagedir_is_dirty(t->pagedir,sptnode->upage))
             {
               file_write_at(sptnode->file, sptnode->upage, sptnode->read_bytes, sptnode->ofs);
             }
+          if (sptnode->loaded)
+          {
             frame_remove(pagedir_get_page(t->pagedir, sptnode->upage));
             pagedir_clear_page(t->pagedir, sptnode->upage);
           }
@@ -436,7 +452,6 @@ Sys_munmap(int mapid)
       }
     }
 }
-
 
 /* Reads a byte at user virtual address UADDR.
 UADDR must be below PHYS_BASE.
