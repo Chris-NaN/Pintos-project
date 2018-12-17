@@ -30,12 +30,13 @@ struct cache_entry* init_cache_entry(block_sector_t sector)
 struct cache_entry* get_cache_entry(block_sector_t sector)
 {
     
-    struct cache_entry* entry;
+    struct cache_entry* entry = NULL;
     struct list_elem* e;
     // find cache entry in list
     for (e = list_begin(&buffer_cache); e != list_end(&buffer_cache);
        e = list_next(e)){
         entry = list_entry(e, struct cache_entry, elem);
+        //entry->loaded = false;
         if (entry->sector == sector) return entry;
     }
     // if not find, go to next two situation: not full(push) or full(evict)
@@ -83,11 +84,14 @@ struct cache_entry* evict_cache_entry()
         // entry could be evict
         if (entry->dirty == true){
             // write back if dirty
-            block_write(fs_device, entry->sector, &entry->block);
+            block_write(fs_device, entry->sector, entry->block);
             entry-> dirty = false;
         }
+        
         break;
     }
+    
+    //memset (entry->block, 0, BLOCK_SECTOR_SIZE);
     entry -> loaded = false;  // have to reload data after origin is evicted
     return entry;   
 }
@@ -97,12 +101,13 @@ struct cache_entry* read_cache_entry(block_sector_t sector)
     struct cache_entry* entry = get_cache_entry(sector);
     // get_cache_entry is just return entry, do not produce any data
     // so we have to read block sector data to entry->block 
-    if (!entry->loaded){
+    if (entry->loaded == false){
         // load data
         block_read (fs_device, sector, entry->block);
         entry->loaded = true;
     }
-
+    
+    //block_read (fs_device, sector, entry->block);
     lock_acquire(&cache_lock);
     entry -> open_cnt++;
     entry -> sector = sector;
@@ -118,7 +123,13 @@ struct cache_entry* read_cache_entry(block_sector_t sector)
 void write_cache_entry(block_sector_t sector, void* buffer, int write_bytes)
 {
     struct cache_entry* entry = get_cache_entry(sector);
-
+    
+    if (entry->loaded == false){
+        // load data
+        block_read (fs_device, sector, entry->block);
+        entry->loaded = true;
+    }
+    
 
     lock_acquire(&cache_lock);
     entry -> open_cnt++;
@@ -129,7 +140,7 @@ void write_cache_entry(block_sector_t sector, void* buffer, int write_bytes)
     memcpy (entry->block, buffer, write_bytes);
     // there might be some data of other block(evicted block)
     // set remain data(write_byte to BLOCK_SECTOR_SIZE) to 0
-    memset (entry->block + write_bytes, 0, BLOCK_SECTOR_SIZE - write_bytes);
+    //memset (entry->block + write_bytes, 0, BLOCK_SECTOR_SIZE - write_bytes);
     entry -> dirty = true;   // could be write back later
 
     lock_acquire(&cache_lock);
