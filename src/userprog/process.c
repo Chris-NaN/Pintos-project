@@ -110,6 +110,11 @@ start_process (void *file_name_)
 
   struct thread *t=thread_current();
   struct child_node * cnode = get_child_node(t->parent,t->tid);
+  
+  /* FS code */
+  if(!t->cwd){
+    t->cwd = dir_open_root();
+  }
 
   /* If load failed, quit. */
   if (!success){ 
@@ -120,6 +125,8 @@ start_process (void *file_name_)
       sema_up(&t->parent->exec_wait);
     Err_exit(-1);   // callee exit(-1) if load fail
   }
+
+
   /* my code */
   /*sema_up the exec_wait if load success */
   if (cnode)
@@ -230,6 +237,10 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
   struct child_node * cnode;
+
+  /* FS code */
+  if(cur -> cwd)
+    dir_close(cur->cwd);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

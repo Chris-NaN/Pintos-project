@@ -12,6 +12,8 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+/* FS code */
+#include "filesys/directory.h"
 
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -101,7 +103,9 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread->cwd = NULL;
 }
+
 
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
@@ -215,6 +219,15 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+
+  /* FS code */
+  // child thread should inherit parent's current working directory
+  if(thread_current()->cwd){
+    t->cwd = dir_reopen(thread_current()->cwd);
+  }else{
+    t->cwd = NULL;
+  }
+
 
   /* Add to run queue. */
   thread_unblock (t);

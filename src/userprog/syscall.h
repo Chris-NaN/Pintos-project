@@ -9,7 +9,9 @@ typedef int pid_t;
 struct file_node
 {
   struct file *file;
+  struct dir *dir;
   int fd;
+  bool isdir;   // dir(T) or file(F) 
   struct list_elem elem;
 };
 
@@ -30,5 +32,13 @@ void Sys_seek(int fd, unsigned position);
 unsigned Sys_tell(int fd);
 void Sys_close(int fd);
 void Err_exit(int status);
+
+// file sys
+bool Sys_mkdir (const char *dir);
+bool Sys_chdir (const char *dir);
+bool Sys_readdir(int fd, char* name);
+bool Sys_isdir (int fd);
+int Sys_inumber (int fd);
+struct file_node * get_file_node(int fd);
 
 #endif /* userprog/syscall.h */

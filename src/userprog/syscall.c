@@ -15,6 +15,9 @@
 #include "devices/shutdown.h"
 #include "threads/synch.h"
 
+#include "filesys/inode.h"
+#include "filesys/directory.h"
+#include <string.h>
 
 static void syscall_handler (struct intr_frame *);
 static struct file* getFile(struct thread* t, int fd);
@@ -141,6 +144,40 @@ syscall_handler (struct intr_frame *f UNUSED)
       Sys_close(fd);
       break;
     }
+    case SYS_CHDIR:
+    {
+      const char* dir = (char *)*((int*)f->esp+1);
+      is_mapped_vaddr(dir);
+      f->eax = Sys_chdir(dir);
+      break;
+    }
+    case SYS_MKDIR:
+    {
+      const char* dir = (char *)*((int*)f->esp+1);
+      is_mapped_vaddr(dir);
+      f->eax = Sys_mkdir (dir);
+      break;
+    }
+    case SYS_READDIR:
+    {
+      int fd = *((int*)f->esp+1);
+      char* name = (char *)*((int*)f->esp+2);
+      check_string(name);
+      f->eax = Sys_readdir(fd, name);
+      break;
+    }
+    case SYS_ISDIR:
+    {
+      int fd = *((int*)f->esp+1);
+      f->eax = Sys_isdir(fd);
+      break;
+    }
+    case SYS_INUMBER:
+    {
+      int fd = *((int*)f->esp+1);
+      f->eax = Sys_inumber(fd);
+      break;
+    }
   }
 }
 
@@ -182,7 +219,7 @@ Sys_create(const char* file, unsigned initial_size)
 {
   if(!file)
     return false;
-  return filesys_create(file,initial_size);
+  return filesys_create(file,initial_size, false);
 }
 
 bool
@@ -202,7 +239,15 @@ Sys_open(const char*file)
   // add file to process file_list and change file discriptor
   struct file_node *node = malloc(sizeof(struct file_node));
   // have to do free operation later, or it will occur mem leak
-  node->file = f;
+  
+  if (inode_is_dir(file_get_inode(f))){
+    node -> dir = (struct dir *)f;
+    node -> isdir = true;
+  }else{
+    node -> file = f;
+    node -> isdir = false;
+  }
+
   node->fd = t->fd;
   t->fd++;
   // push node into thread's file_list
@@ -291,13 +336,19 @@ struct file* getFile(struct thread* t, int fd)
   return NULL;
 }
 
+// have to call this func whit All == true when process exit
 void CloseFile(struct thread *t, int fd, bool All)
 {
   if(All){
     while(!list_empty(&t->file_list)){
       struct file_node *node = list_entry(list_pop_front(&t->file_list), struct file_node,
             elem);
-      file_close(node->file);
+      if (node -> isdir){
+        dir_close(node->dir);
+      }else{
+        file_close(node->file);
+      }
+      list_remove(&node->elem);
       free(node);
     }
     return;
@@ -306,8 +357,12 @@ void CloseFile(struct thread *t, int fd, bool All)
        e = list_next(e)){
     struct file_node *node = list_entry(e, struct file_node, elem);
     if(node->fd==fd){
+      if (node -> isdir){
+        dir_close(node->dir);
+      }else{
+        file_close(node->file);
+      }
       list_remove(e);
-      file_close(node->file);
       free(node);
       return;
     }
@@ -373,5 +428,74 @@ void check_string(const void* pointer)
   Err_exit(-1);
 }
 
+bool Sys_chdir (const char *dir)
+{
+  return dirsys_chdir(dir);
+}
+
+// filesys syscall
+bool Sys_mkdir (const char *dir)
+{
+  return filesys_create(dir, 0, true);
+}
+
+// fd -> dir, store dir_name into name
+bool Sys_readdir(int fd, char* name)
+{
+  // "." and ".." should not be return 
+  if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)  return false;
+  struct file_node *node = get_file_node(fd);
+  if (!node || !node->isdir){
+    return false;
+  }
+  if (!dir_readdir(node->dir, name))
+  {
+    return false;
+  }
+  return true;
+
+}
+
+bool Sys_isdir (int fd)
+{
+  struct file_node *node = get_file_node(fd);
+  if (!node)
+    {
+      return -1;
+    }
+  return node->isdir;
+}
+
+int Sys_inumber (int fd)
+{
+  struct file_node *node = get_file_node(fd);
+  if (!node)  return -1;
+
+  block_sector_t inumber;
+  if (node->isdir)
+  {
+    inumber = inode_get_inumber(dir_get_inode(node->dir));
+  }
+  else
+  {
+    inumber = inode_get_inumber(file_get_inode(node->file));
+  }
+  return inumber;
+}
+
+// given fd, return file_node of fd
+// return NULL if not file_node is not found
+struct file_node * get_file_node(int fd)
+{
+  struct thread *t = thread_current();
+  for (struct list_elem *e=list_begin(&t->file_list);e!=list_end(&t->file_list);
+       e = list_next(e)){
+    struct file_node *node = list_entry(e, struct file_node, elem);
+    if(node->fd==fd){
+      return node;
+    }
+  }
+  return NULL;
+}
 
 

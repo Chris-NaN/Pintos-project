@@ -26,7 +26,7 @@ struct dir_entry
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), true);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -156,6 +156,9 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   if (lookup (dir, name, NULL, NULL))
     goto done;
 
+  if(!inode_add_parent(inode_get_inumber(dir_get_inode(dir)), inode_sector))
+    goto done;
+
   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
      current end-of-file.
@@ -233,4 +236,12 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
         } 
     }
   return false;
+}
+
+
+bool dir_get_parent(struct dir *dir, struct inode **inode)
+{
+  block_sector_t sector = inode_get_parent(dir_get_inode(dir));
+  *inode = inode_open(sector);
+  return *inode!=NULL;
 }
