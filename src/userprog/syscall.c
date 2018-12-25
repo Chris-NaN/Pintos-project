@@ -309,16 +309,20 @@ Sys_close(int fd)
 int
 Sys_write(int fd, const void *buffer, unsigned size)
 {
-  if(fd==STDOUT_FILENO){
+   if(fd==STDOUT_FILENO){
     putbuf(buffer, size);
     return size;
   }
   struct thread *t = thread_current();
   struct file *f = getFile(t,fd);   // get the file of current process
+  
+  struct file_node *node = get_file_node(fd);
+  
   int bytes = 0;
   if(f==NULL){
     Err_exit(-1);   // return 0 if no bytes could be written at all
   }
+  if (node -> isdir) return -1;
   bytes = file_write(f,buffer,size);
   return bytes;
 

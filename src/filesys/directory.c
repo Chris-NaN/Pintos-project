@@ -6,6 +6,8 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
+
+
 /* A directory. */
 struct dir 
   {
@@ -20,6 +22,8 @@ struct dir_entry
     char name[NAME_MAX + 1];            /* Null terminated file name. */
     bool in_use;                        /* In use or free? */
   };
+
+bool dir_is_empty(struct inode *inode);
 
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
@@ -204,6 +208,14 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
+  /* my code, about remove */
+  // cannot be removed if inode is used by other process
+  if (inode_is_dir(inode) && inode_open_cnt(inode)>1 )
+    goto done;
+
+  if (inode_is_dir(inode) && !dir_is_empty(inode))
+    goto done;
+
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
@@ -245,3 +257,16 @@ bool dir_get_parent(struct dir *dir, struct inode **inode)
   *inode = inode_open(sector);
   return *inode!=NULL;
 }
+
+
+bool dir_is_empty(struct inode *inode)
+{
+  struct dir_entry e;
+  off_t pos = 0;
+  while(inode_read_at(inode, &e, sizeof e, pos) == sizeof e){
+    pos += sizeof e;
+    if (e.in_use)
+      return false;
+  }
+  return true;
+} 

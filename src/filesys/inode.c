@@ -788,3 +788,8 @@ bool inode_add_parent (block_sector_t parent_sector, block_sector_t child_sector
   inode_close(inode);
   return true;
 }
+
+int inode_open_cnt(struct inode* inode)
+{
+  return inode->open_cnt;
+}

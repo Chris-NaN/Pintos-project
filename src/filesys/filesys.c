@@ -81,6 +81,7 @@ filesys_open (const char *name)
   // struct dir *dir = dir_open_root ();
   if (strcmp(name, "/") == 0) return (struct file*) dir_open_root();
   struct dir* dir = get_parent_dir(name);
+  if (strcmp(name, ".") == 0) return (struct file *) dir;
   char* file_name = get_filename(name);
   struct inode *inode = NULL;
 
@@ -198,7 +199,7 @@ struct dir *get_parent_dir (const char *path)
 
   // relative: mkdir dir_name;  mkdir ./dir_name;
   // return the current working dir
-  if (strchr (path, '/') == NULL || strcmp (token, ".") == 0)
+  if (strchr (path, '/') == NULL || strcmp (path, ".") == 0)
   {
     if (strlen (path) > NAME_MAX + 1)
       return NULL;
@@ -268,7 +269,13 @@ bool dirsys_chdir (const char* name)
   struct inode *inode = NULL;
 
   struct thread *t = thread_current ();
+  if (strcmp(name, "/") == 0){
+    t->cwd = dir;
+    free(file_name);
+    return true;
+  }
   if (!dir_lookup (dir, file_name, &inode))  return false;
+
   dir_close (dir);
   //printf("chidir: %s\n", file_name);
   dir_close(t->cwd);

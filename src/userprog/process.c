@@ -267,7 +267,7 @@ process_exit (void)
        while(!list_empty(&cur->file_list))
       {
         struct file_node *nd = list_entry(list_pop_front(&cur->file_list), struct file_node, elem);
-        file_close(nd->file);
+        if (!nd->isdir)  file_close(nd->file);
         free(nd);
       }
 
