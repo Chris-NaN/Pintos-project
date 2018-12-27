@@ -181,18 +181,6 @@ struct dir *get_parent_dir (const char *path)
   // deal root dir mkdir problem:
   // absolute path: 
 
-  // absolute : mkdir /a/b/dir_name
-  // token == NULL
-  if (path[0] == '/' || !cur->cwd){
-    // open root dir first
-    dir = dir_open_root();
-    if (strlen(path)==1) return dir;  // only "/"
-    //  mkdir /a/b/c, should remove first "/"
-    //token = strtok_r(NULL, "/", &save_ptr);
-  }else{  // open cwd
-    //dir = dir_open (dir_get_inode(cur->cwd));
-    dir = dir_reopen (cur->cwd);
-  }
   // relative: mkdir ../dir_name
   // return the parent's working dir
   // also some recursive problem: mkdir ../../dir_name
@@ -210,6 +198,18 @@ struct dir *get_parent_dir (const char *path)
     }
   }
 
+  // absolute : mkdir /a/b/dir_name
+  // token == NULL
+  if (path[0] == '/' || !cur->cwd){
+    // open root dir first
+    dir = dir_open_root();
+    if (strlen(path)==1) return dir;  // only "/"
+    //  mkdir /a/b/c, should remove first "/"
+    //token = strtok_r(NULL, "/", &save_ptr);
+  }else{  // open cwd
+    //dir = dir_open (dir_get_inode(cur->cwd));
+    dir = dir_reopen (cur->cwd);
+  }
 
   
   // if path is relative path, token== ".."
@@ -269,7 +269,8 @@ bool dirsys_chdir (const char* name)
   struct inode *inode = NULL;
 
   struct thread *t = thread_current ();
-  if (strcmp(name, "/") == 0){
+  if (strcmp(name, "/") == 0 || strcmp(name, "..")==0 ){
+    //printf("..: %p\n", dir);
     t->cwd = dir;
     free(file_name);
     return true;
